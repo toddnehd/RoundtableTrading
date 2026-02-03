@@ -8,6 +8,160 @@
 
 ---
 
+## 📊 진행 상황 요약
+
+### 전체 진행률
+
+| Week | 기간 | 주제 | 핵심 작업 | 상태 | 완료율 |
+|------|------|------|-----------|------|--------|
+| **Week 0** | 사전 준비 | 환경 설정 | 프로젝트 구조, Docker, DB 스키마, Git 설정 | ✅ 완료 | 100% |
+| **Week 1-2** | 2주 | 데이터 파이프라인 | KIS API 연동, DB 모델, 데이터 수집 스크립트 | 📋 대기 | 0% |
+| **Week 3-4** | 2주 | 단일 에이전트 | LLM 클라이언트, 기술적 분석 에이전트, 프롬프트 | 📋 대기 | 0% |
+| **Week 5-6** | 2주 | 멀티 에이전트 | 5개 에이전트, 토론 엔진, 합의 메커니즘 | 📋 대기 | 0% |
+| **Week 7** | 1주 | 백테스팅 | 백테스팅 엔진, 성과 지표, Walk-forward | 📋 대기 | 0% |
+| **Week 8** | 1주 | UI & 통합 | Streamlit 대시보드, 통합 테스트, 문서화 | 📋 대기 | 0% |
+
+**전체 진행률**: 12.5% (1/8 단계 완료)
+
+---
+
+### Week별 상세 요약
+
+<details>
+<summary><b>✅ Week 0: 사전 준비 (환경 설정)</b> - 완료</summary>
+
+**목표**: 로컬 개발 환경 완벽 구축
+
+**완료 항목**:
+- ✅ 프로젝트 구조 생성 (src/, tests/, scripts/, streamlit_app/, notebooks/)
+- ✅ Python 3.13 + uv 패키지 매니저 설정
+- ✅ Docker Compose (PostgreSQL + TimescaleDB + Redis)
+- ✅ 데이터베이스 스키마 (8개 테이블)
+- ✅ 170개 패키지 설치
+- ✅ Git 설정 및 GitHub 연동
+- ✅ Pre-commit hooks (ruff + mypy)
+
+**산출물**:
+- pyproject.toml, docker-compose.yml, Makefile
+- scripts/init_db.sql
+- .gitignore, .pre-commit-config.yaml
+- doc/git-workflow.md
+
+**완료일**: 2026-01-31
+
+</details>
+
+<details>
+<summary><b>📋 Week 1-2: 데이터 수집 파이프라인</b> - 대기중</summary>
+
+**목표**: 안정적인 데이터 수집 및 저장 시스템 구축
+
+**주요 작업**:
+- [ ] 한국투자증권 API 클라이언트 구현
+- [ ] 데이터베이스 모델 정의 (SQLAlchemy ORM)
+- [ ] 종목 정보 수집 스크립트
+- [ ] 일봉 데이터 수집 스크립트
+- [ ] 데이터 검증 및 테스트
+
+**예상 산출물**:
+- src/data/kis_api.py
+- src/data/models.py
+- scripts/collect_stocks.py
+- scripts/collect_daily_prices.py
+- tests/test_data_collection.py
+
+</details>
+
+<details>
+<summary><b>📋 Week 3-4: 단일 에이전트 프로토타입</b> - 대기중</summary>
+
+**목표**: 하나의 에이전트를 완벽하게 구현하여 패턴 확립
+
+**주요 작업**:
+- [ ] LLM 클라이언트 추상화 (Claude, GPT 지원)
+- [ ] BaseAgent 클래스 설계
+- [ ] 기술적 분석 에이전트 구현
+- [ ] 프롬프트 엔지니어링
+- [ ] 단위 테스트 작성
+
+**예상 산출물**:
+- src/agents/llm/base.py
+- src/agents/base.py
+- src/agents/technical.py
+- tests/test_agents.py
+
+</details>
+
+<details>
+<summary><b>📋 Week 5-6: 멀티 에이전트 협업 시스템</b> - 대기중</summary>
+
+**목표**: 5개 에이전트 구현 및 토론 메커니즘 완성
+
+**주요 작업**:
+- [ ] 나머지 4개 에이전트 구현 (기업가치, 시장, 리스크, 조정자)
+- [ ] 토론 엔진 구현 (5단계 프로토콜)
+- [ ] 합의 메커니즘 구현
+- [ ] 통합 테스트
+
+**예상 산출물**:
+- src/agents/fundamental.py
+- src/agents/market.py
+- src/agents/risk.py
+- src/agents/moderator.py
+- src/debate/engine.py
+- src/debate/consensus.py
+
+</details>
+
+<details>
+<summary><b>📋 Week 7: 백테스팅 엔진</b> - 대기중</summary>
+
+**목표**: 과거 데이터로 전략 성과 검증
+
+**주요 작업**:
+- [ ] 백테스팅 엔진 구현
+- [ ] 거래 비용 반영
+- [ ] 성과 지표 계산 (Sharpe, MDD, Win Rate)
+- [ ] Walk-forward 분석
+
+**예상 산출물**:
+- src/backtest/engine.py
+- src/backtest/metrics.py
+- tests/test_backtest.py
+
+</details>
+
+<details>
+<summary><b>📋 Week 8: Streamlit UI 및 통합</b> - 대기중</summary>
+
+**목표**: 사용자 인터페이스 완성 및 전체 시스템 통합
+
+**주요 작업**:
+- [ ] Streamlit 대시보드 구현
+- [ ] 전체 시스템 통합 테스트
+- [ ] 문서 작성 (README, 사용 가이드)
+- [ ] 배포 준비
+
+**예상 산출물**:
+- streamlit_app/app.py
+- streamlit_app/pages/
+- README.md
+- docs/user-guide.md
+
+</details>
+
+---
+
+### 다음 작업
+
+**현재 위치**: Week 0 완료  
+**다음 단계**: Week 1-2 데이터 수집 파이프라인
+
+**즉시 시작 가능한 작업**:
+1. 한국투자증권 API 키 발급
+2. KIS API 클라이언트 구현
+3. 데이터베이스 모델 정의
+
 ## 📋 개요
 
 ### MVP 철학
