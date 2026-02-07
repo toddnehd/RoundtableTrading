@@ -2716,11 +2716,19 @@ name = "roundtable-trading"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiohttp" },
+    { name = "alembic" },
+    { name = "asyncpg" },
     { name = "httpx" },
     { name = "loguru" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "pandas-ta" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pykrx" },
     { name = "python-dotenv" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
 [package.optional-dependencies]
@@ -2755,33 +2763,43 @@ ui = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "ipython" },
+    { name = "jupyter" },
     { name = "pre-commit" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.13.3" },
     { name = "aiohttp", marker = "extra == 'data'", specifier = ">=3.9.0" },
+    { name = "alembic", specifier = ">=1.18.2" },
     { name = "alembic", marker = "extra == 'data'", specifier = ">=1.12.0" },
     { name = "anthropic", marker = "extra == 'llm'", specifier = ">=0.18.0" },
+    { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "asyncpg", marker = "extra == 'data'", specifier = ">=0.29.0" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "ipython", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "jupyter", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "loguru", specifier = ">=0.7.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.7.0" },
+    { name = "numpy", specifier = ">=2.2.6" },
     { name = "numpy", marker = "extra == 'data'", specifier = ">=1.24.0" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=1.0.0" },
+    { name = "pandas", specifier = ">=2.3.3" },
     { name = "pandas", marker = "extra == 'data'", specifier = ">=2.0.0" },
+    { name = "pandas-ta", specifier = ">=0.4.71b0" },
     { name = "pandas-ta", marker = "extra == 'data'", specifier = ">=0.3.0" },
     { name = "plotly", marker = "extra == 'ui'", specifier = ">=5.18.0" },
     { name = "pydantic", specifier = ">=2.5.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
+    { name = "pykrx", specifier = ">=1.0.51" },
     { name = "pykrx", marker = "extra == 'data'", specifier = ">=1.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.46" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'data'", specifier = ">=2.0.0" },
     { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.30.0" },
     { name = "tenacity", marker = "extra == 'llm'", specifier = ">=8.2.0" },
@@ -2789,7 +2807,11 @@ requires-dist = [
 provides-extras = ["dev", "data", "llm", "ui"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pre-commit", specifier = ">=4.5.1" }]
+dev = [
+    { name = "ipython", specifier = ">=9.9.0" },
+    { name = "jupyter", specifier = ">=1.1.1" },
+    { name = "pre-commit", specifier = ">=4.5.1" },
+]
 
 [[package]]
 name = "rpds-py"
