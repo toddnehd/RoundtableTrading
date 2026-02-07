@@ -1,16 +1,23 @@
-from datetime import datetime
+from typing import cast
 
+import FinanceDataReader  # type: ignore[import-untyped]
+import pandas as pd
 from loguru import logger
-from pykrx import stock
+from pykrx import stock  # type: ignore[import-untyped]
 
 from src.data.models import DailyPrice, Stock
 
 
 class PyKrxCollector:
-    """pykrx를 이용한 한국 주식 데이터 수집"""
+    """pykrx + FinanceDataReader를 이용한 한국 주식 데이터 수집
+
+    Note:
+        2026년 1월 KRX 정책 변경으로 pykrx의 get_market_ticker_list가 더 이상 작동하지 않음.
+        종목 리스트는 FinanceDataReader를 사용하고, OHLCV 데이터는 pykrx를 사용합니다.
+    """
 
     def get_stock_list(self, market: str = "KOSPI") -> list[Stock]:
-        """종목 리스트 조회
+        """종목 리스트 조회 (FinanceDataReader 사용)
 
         Args:
             market: 'KOSPI' 또는 'KOSDAQ'
@@ -19,13 +26,17 @@ class PyKrxCollector:
             Stock 객체 리스트
         """
         try:
-            today = datetime.now().strftime("%Y%m%d")
-            tickers = stock.get_market_ticker_list(today, market=market)
+            df = FinanceDataReader.StockListing(market)
 
             stocks = []
-            for ticker in tickers:
-                name = stock.get_market_ticker_name(ticker)
-                stocks.append(Stock(stock_code=ticker, stock_name=name, market=market))
+            for _, row in df.iterrows():
+                stocks.append(
+                    Stock(
+                        stock_code=row["Code"],
+                        stock_name=row["Name"],
+                        market=market,
+                    )
+                )
 
             logger.info(f"Retrieved {len(stocks)} stocks from {market}")
             return stocks
@@ -54,10 +65,12 @@ class PyKrxCollector:
 
             prices = []
             for date_idx, row in df.iterrows():
+                # date_idx is pd.Timestamp from DatetimeIndex
+                date_val = cast(pd.Timestamp, date_idx).date()
                 prices.append(
                     DailyPrice(
                         stock_code=stock_code,
-                        date=date_idx.date(),
+                        date=date_val,
                         open_price=int(row["시가"]),
                         high_price=int(row["고가"]),
                         low_price=int(row["저가"]),
