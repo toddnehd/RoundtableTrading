@@ -51,3 +51,7 @@ credentials.json
 secrets.json
 *.pem
 *.key
+
+# Local documentation (managed locally only)
+AGENTS.md
+doc/
