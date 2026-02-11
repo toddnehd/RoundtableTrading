@@ -149,7 +149,10 @@ class TestTechnicalAnalysisAgent:
         agent = TechnicalAnalysisAgent(llm_client=mock_llm)
         prompt = agent.get_system_prompt()
 
-        assert "기술적 분석 전문가" in prompt
+        assert "기술적 분석" in prompt
+        assert "RSI" in prompt
+        assert "MACD" in prompt
+        assert "이동평균선" in prompt
         assert "의견:" in prompt
         assert "신뢰도:" in prompt
         assert "근거" in prompt
