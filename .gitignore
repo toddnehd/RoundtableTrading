@@ -55,3 +55,4 @@ secrets.json
 # Local documentation (managed locally only)
 AGENTS.md
 doc/
+.opencode/
