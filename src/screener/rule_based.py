@@ -86,6 +86,15 @@ class RuleBasedScreener:
         """Get candidate stocks matching basic criteria."""
         markets_clause = ", ".join(f"'{m}'" for m in criteria.markets)
 
+        params: list = [start_date, end_date, criteria.min_price]
+        max_price_clause = ""
+        if criteria.max_price:
+            params.append(criteria.max_price)
+            max_price_clause = f"AND dp.close_price <= ${len(params)}"
+
+        params.append(criteria.min_volume)
+        min_volume_param = len(params)
+
         query = f"""
             WITH recent_prices AS (
                 SELECT
@@ -106,7 +115,7 @@ class RuleBasedScreener:
                     AND s.is_active = true
                     AND dp.date BETWEEN $1 AND $2
                     AND dp.close_price >= $3
-                    {"AND dp.close_price <= $4" if criteria.max_price else ""}
+                    {max_price_clause}
             ),
             latest AS (
                 SELECT * FROM recent_prices WHERE rn = 1
@@ -135,14 +144,10 @@ class RuleBasedScreener:
                 END as volume_surge_ratio
             FROM latest l
             JOIN avg_volume av ON l.stock_code = av.stock_code
-            WHERE av.avg_vol_20d >= $5
+            WHERE av.avg_vol_20d >= ${min_volume_param}
             ORDER BY volume_surge_ratio DESC
             LIMIT 500
         """
-
-        params = [start_date, end_date, criteria.min_price, criteria.min_volume]
-        if criteria.max_price:
-            params.insert(3, criteria.max_price)
 
         rows = await conn.fetch(query, *params)
         return [dict(row) for row in rows]
@@ -265,13 +270,9 @@ class RuleBasedScreener:
         if len(closes) >= 20:
             metrics["ma20"] = sum(closes[:20]) / 20
 
-        # Volume metrics
-        if len(volumes) >= 20:
-            avg_vol = (
-                sum(volumes[1:21]) / 20
-                if len(volumes) > 20
-                else sum(volumes[1:]) / (len(volumes) - 1)
-            )
+        if len(volumes) >= 2:
+            lookback = min(20, len(volumes) - 1)
+            avg_vol = sum(volumes[1 : lookback + 1]) / lookback
             metrics["volume_ratio"] = volumes[0] / avg_vol if avg_vol > 0 else 0
 
         # Volatility (ATR-like)
@@ -345,21 +346,19 @@ class RuleBasedScreener:
         """Calculate overall screening score."""
         score = 0.0
 
-        # Volume surge contribution (0-30 points)
-        volume_ratio = candidate.get("volume_surge_ratio", 0)
-        score += min(volume_ratio * 10, 30)
+        sql_surge = float(candidate.get("volume_surge_ratio", 0) or 0)
+        metric_surge = float(metrics.get("volume_ratio") or sql_surge)
+        effective_surge = max(sql_surge, metric_surge)
+        score += min(effective_surge * 3, 30)
 
-        # Momentum contribution (0-25 points)
         price_change_5d = metrics.get("price_change_5d_pct", 0)
         if price_change_5d > 0:
-            score += min(price_change_5d * 2.5, 25)
+            score += min(price_change_5d * 1.5, 25)
 
-        # Near high contribution (0-20 points)
         pct_from_high = metrics.get("pct_from_high", -100)
         if pct_from_high >= -10:
             score += 20 + pct_from_high
 
-        # Reason count contribution (5 points each, max 25)
         score += min(len(reasons) * 5, 25)
 
         return float(round(score, 2))
