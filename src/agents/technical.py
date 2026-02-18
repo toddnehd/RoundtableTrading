@@ -97,17 +97,17 @@ class TechnicalAnalysisAgent(BaseAgent):
 
 ## 기술적 지표
 이동평균선:
-- 5일선: {indicators['ma5']:,}원 (현재가 대비 {self._price_diff_pct(current_price, indicators['ma5'])})
-- 20일선: {indicators['ma20']:,}원 (현재가 대비 {self._price_diff_pct(current_price, indicators['ma20'])})
-- 60일선: {indicators['ma60']:,}원 (현재가 대비 {self._price_diff_pct(current_price, indicators['ma60'])})
+- 5일선: {indicators["ma5"]:,}원 (현재가 대비 {self._price_diff_pct(current_price, indicators["ma5"])})
+- 20일선: {indicators["ma20"]:,}원 (현재가 대비 {self._price_diff_pct(current_price, indicators["ma20"])})
+- 60일선: {indicators["ma60"]:,}원 (현재가 대비 {self._price_diff_pct(current_price, indicators["ma60"])})
 - 배열 상태: {ma_arrangement}
 
 모멘텀 지표:
-- RSI (14일): {indicators['rsi']:.1f}
-- MACD: {indicators['macd']:.2f}
+- RSI (14일): {indicators["rsi"]:.1f}
+- MACD: {indicators["macd"]:.2f}
 
 거래량:
-- 최근 5일 평균 대비: {indicators['volume_ratio']:.2f}배
+- 최근 5일 평균 대비: {indicators["volume_ratio"]:.2f}배
 
 ## 최근 5일 가격
 {recent_prices}

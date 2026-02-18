@@ -84,18 +84,18 @@ class RiskAssessmentAgent(BaseAgent):
 ## 리스크 지표
 
 ### 변동성
-- 20일 일평균 변동폭: {risk_metrics['avg_daily_range']:.1f}%
-- 최근 5일 변동폭: {risk_metrics['recent_volatility']:.1f}%
-- 변동성 비율 (최근/평균): {risk_metrics['volatility_ratio']:.2f}배
+- 20일 일평균 변동폭: {risk_metrics["avg_daily_range"]:.1f}%
+- 최근 5일 변동폭: {risk_metrics["recent_volatility"]:.1f}%
+- 변동성 비율 (최근/평균): {risk_metrics["volatility_ratio"]:.2f}배
 
 ### 가격 위치
-- 20일 고점 대비: {risk_metrics['from_high_20d']:.1f}%
-- 20일 저점 대비: {risk_metrics['from_low_20d']:.1f}%
-- 최근 5일 수익률: {risk_metrics['return_5d']:.1f}%
+- 20일 고점 대비: {risk_metrics["from_high_20d"]:.1f}%
+- 20일 저점 대비: {risk_metrics["from_low_20d"]:.1f}%
+- 최근 5일 수익률: {risk_metrics["return_5d"]:.1f}%
 
 ### 거래량
-- 거래량 추세: {risk_metrics['volume_trend']}
-- 거래량 변동: {risk_metrics['volume_change']:.1f}%
+- 거래량 추세: {risk_metrics["volume_trend"]}
+- 거래량 변동: {risk_metrics["volume_change"]:.1f}%
 
 {self._format_financial_risks(data)}
 

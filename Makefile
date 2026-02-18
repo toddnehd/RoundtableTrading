@@ -1,18 +1,20 @@
-.PHONY: help install up down logs shell test lint format clean
+.PHONY: help install up down logs shell test lint format clean debate debate-stock
 
 help:
 	@echo "RoundtableTrading Development Commands"
 	@echo "======================================="
-	@echo "install    - Install all dependencies"
-	@echo "up         - Start Docker services"
-	@echo "down       - Stop Docker services"
-	@echo "logs       - View Docker logs"
-	@echo "shell      - PostgreSQL shell"
-	@echo "redis-cli  - Redis CLI"
-	@echo "test       - Run tests"
-	@echo "lint       - Run linter"
-	@echo "format     - Format code"
-	@echo "clean      - Clean cache and temp files"
+	@echo "install       - Install all dependencies"
+	@echo "up            - Start Docker services"
+	@echo "down          - Stop Docker services"
+	@echo "logs          - View Docker logs"
+	@echo "shell         - PostgreSQL shell"
+	@echo "redis-cli     - Redis CLI"
+	@echo "test          - Run tests"
+	@echo "lint          - Run linter"
+	@echo "format        - Format code"
+	@echo "clean         - Clean cache and temp files"
+	@echo "debate        - Run debate engine test (sample data)"
+	@echo "debate-stock  - Run debate engine test with DB stock (STOCK=005930)"
 
 install:
 	uv sync --all-extras
@@ -51,3 +53,9 @@ clean:
 	find . -type d -name ".pytest_cache" -exec rm -rf {} +
 	find . -type d -name ".ruff_cache" -exec rm -rf {} +
 	find . -type d -name "*.egg-info" -exec rm -rf {} +
+
+debate:
+	PYTHONPATH=. uv run python scripts/test_debate_integration.py
+
+debate-stock:
+	PYTHONPATH=. uv run python scripts/test_debate_integration.py --stock $(STOCK)
