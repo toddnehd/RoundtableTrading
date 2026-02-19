@@ -5,6 +5,10 @@ from src.agents.base import (
     BaseAgent,
     Opinion,
 )
+from src.agents.fundamental import FundamentalAnalysisAgent
+from src.agents.market import MarketSentimentAgent
+from src.agents.moderator import ModeratorAgent
+from src.agents.risk import RiskAssessmentAgent
 from src.agents.technical import TechnicalAnalysisAgent
 
 __all__ = [
@@ -12,6 +16,10 @@ __all__ = [
     "AgentOpinion",
     "AnalysisData",
     "BaseAgent",
+    "FundamentalAnalysisAgent",
+    "MarketSentimentAgent",
+    "ModeratorAgent",
     "Opinion",
+    "RiskAssessmentAgent",
     "TechnicalAnalysisAgent",
 ]

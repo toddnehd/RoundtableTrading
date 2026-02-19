@@ -55,4 +55,6 @@ secrets.json
 # Local documentation (managed locally only)
 AGENTS.md
 doc/
+
+# OpenCode local agent configs (managed locally only)
 .opencode/
