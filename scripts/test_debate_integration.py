@@ -103,11 +103,21 @@ async def load_data_from_db(stock_code: str) -> AnalysisData | None:
                     for row in reversed(rows)
                 ]
 
-                return AnalysisData(
-                    stock_code=stock["stock_code"],
-                    stock_name=stock["stock_name"],
-                    prices=prices,
+            # financial_data 로드
+            financials = await db.get_financial_data(stock_code, limit=8)
+            if financials:
+                logger.info(f"{stock_code} 재무 데이터 {len(financials)}건 로드")
+            else:
+                logger.warning(
+                    f"{stock_code} 재무 데이터 없음 (collect_financial_data.py 실행 필요)"
                 )
+
+            return AnalysisData(
+                stock_code=stock["stock_code"],
+                stock_name=stock["stock_name"],
+                prices=prices,
+                financials=financials,
+            )
         finally:
             await db.close()
 
