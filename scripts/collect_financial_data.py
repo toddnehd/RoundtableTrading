@@ -8,7 +8,8 @@ Usage:
 
 import argparse
 import asyncio
-from datetime import datetime
+import sys
+from datetime import date, datetime
 
 from loguru import logger
 
@@ -17,6 +18,49 @@ from src.data.collectors.dart_collector import DartCollector
 from src.data.collectors.dart_corp_code import DartCorpCodeMapper
 from src.data.collectors.dart_errors import DartAPIError, DartNoDataError
 from src.data.storage.db_manager import DatabaseManager
+
+
+def get_available_quarters(reference_date: date) -> list[tuple[str, str]]:
+    """Return list of (bsns_year, reprt_code) tuples available for collection.
+
+    Based on DART disclosure deadlines:
+    - Q1 (11013): disclosed by May 15 of the same year
+    - Q2 (11012): disclosed by Aug 14 of the same year
+    - Q3 (11014): disclosed by Nov 14 of the same year
+    - Q4 (11011): disclosed by Mar 31 of the following year
+
+    Args:
+        reference_date: Date to use as reference (typically today)
+
+    Returns:
+        List of (bsns_year, reprt_code) tuples in chronological order,
+        covering the previous 1 year of disclosed quarters.
+    """
+    quarters: list[tuple[str, str, date]] = []
+    current_year = reference_date.year
+
+    # Check two years: (current_year - 2) and (current_year - 1)
+    for year in (current_year - 2, current_year - 1):
+        # Q1 (11013): disclosed by May 15 of same year
+        if reference_date >= date(year, 5, 15):
+            quarters.append((str(year), "11013", date(year, 5, 15)))
+        # Q2 (11012): disclosed by Aug 14 of same year
+        if reference_date >= date(year, 8, 14):
+            quarters.append((str(year), "11012", date(year, 8, 14)))
+        # Q3 (11014): disclosed by Nov 14 of same year
+        if reference_date >= date(year, 11, 14):
+            quarters.append((str(year), "11014", date(year, 11, 14)))
+        # Q4 (11011): disclosed by Mar 31 of FOLLOWING year
+        if reference_date >= date(year + 1, 3, 31):
+            quarters.append((str(year), "11011", date(year + 1, 3, 31)))
+
+    # Sort chronologically by deadline
+    quarters.sort(key=lambda x: x[2])
+
+    # Keep only the most recent 4 quarters (previous 1 year)
+    quarters = quarters[-4:]
+
+    return [(year, code) for year, code, _ in quarters]
 
 
 async def collect_financial_data(stock_code: str, bsns_year: str, reprt_code: str) -> None:
@@ -95,6 +139,26 @@ async def collect_financial_data(stock_code: str, bsns_year: str, reprt_code: st
         await db.close()
 
 
+async def collect_all_quarters(stock_code: str) -> None:
+    """Collect all available quarters for a stock based on current date.
+
+    Args:
+        stock_code: KRX 6-digit stock code
+    """
+    quarters = get_available_quarters(date.today())
+    logger.info(f"{stock_code}: {len(quarters)}개 분기 수집 시작 {quarters}")
+
+    success = 0
+    for bsns_year, reprt_code in quarters:
+        try:
+            await collect_financial_data(stock_code, bsns_year, reprt_code)
+            success += 1
+        except Exception as e:
+            logger.warning(f"{bsns_year}/{reprt_code} 수집 실패: {e}")
+
+    logger.info(f"{stock_code}: {len(quarters)}개 분기 중 {success}개 수집 완료")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="DART API 재무 데이터 수집")
     parser.add_argument("--stock", required=True, help="종목 코드 (예: 005930)")
@@ -109,9 +173,20 @@ def main() -> None:
         choices=["11011", "11012", "11013", "11014"],
         help="보고서 종류 (11011=사업보고서, 11012=반기, 11013=1분기, 11014=3분기)",
     )
+    parser.add_argument(
+        "--all-quarters",
+        action="store_true",
+        help="현재 날짜 기준으로 공시된 최근 4개 분기 자동 수집",
+    )
     args = parser.parse_args()
 
-    asyncio.run(collect_financial_data(args.stock, args.year, args.report))
+    if args.all_quarters and "--report" in sys.argv:
+        parser.error("--all-quarters와 --report는 동시에 사용할 수 없습니다")
+
+    if args.all_quarters:
+        asyncio.run(collect_all_quarters(args.stock))
+    else:
+        asyncio.run(collect_financial_data(args.stock, args.year, args.report))
 
 
 if __name__ == "__main__":
