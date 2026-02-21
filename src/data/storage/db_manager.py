@@ -2,7 +2,7 @@ import asyncpg
 from loguru import logger
 
 from src.config import settings
-from src.data.models import DailyPrice, Stock
+from src.data.models import DailyPrice, FinancialData, Stock
 
 
 class DatabaseManager:
@@ -143,3 +143,134 @@ class DatabaseManager:
             )
 
             return row["count"] > 0 if row else False
+
+    async def save_financial_data(self, financials: list[FinancialData]) -> None:
+        """Save financial data to database using UPSERT.
+
+        Args:
+            financials: List of FinancialData objects to save
+        """
+        if not self.pool:
+            raise RuntimeError("Database not connected")
+
+        async with self.pool.acquire() as conn:
+            await conn.executemany(
+                """
+                INSERT INTO financial_data
+                    (stock_code, quarter, revenue, operating_income, net_income,
+                     per, pbr, roe, debt_ratio, eps, bps, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+                ON CONFLICT (stock_code, quarter) DO UPDATE
+                SET revenue = EXCLUDED.revenue,
+                    operating_income = EXCLUDED.operating_income,
+                    net_income = EXCLUDED.net_income,
+                    per = EXCLUDED.per,
+                    pbr = EXCLUDED.pbr,
+                    roe = EXCLUDED.roe,
+                    debt_ratio = EXCLUDED.debt_ratio,
+                    eps = EXCLUDED.eps,
+                    bps = EXCLUDED.bps,
+                    updated_at = NOW()
+                """,
+                [
+                    (
+                        f.stock_code,
+                        f.quarter,
+                        f.revenue,
+                        f.operating_income,
+                        f.net_income,
+                        f.per,
+                        f.pbr,
+                        f.roe,
+                        f.debt_ratio,
+                        f.eps,
+                        f.bps,
+                    )
+                    for f in financials
+                ],
+            )
+        logger.info(f"Saved {len(financials)} financial records to database")
+
+    async def get_financial_data(self, stock_code: str, limit: int = 8) -> list[FinancialData]:
+        """Get financial data for a stock, ordered by quarter descending.
+
+        Args:
+            stock_code: KRX stock code
+            limit: Maximum number of records to return
+
+        Returns:
+            List of FinancialData objects
+        """
+        if not self.pool:
+            raise RuntimeError("Database not connected")
+
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT stock_code, quarter, revenue, operating_income, net_income,
+                       per, pbr, roe, debt_ratio, eps, bps
+                FROM financial_data
+                WHERE stock_code = $1
+                ORDER BY quarter DESC
+                LIMIT $2
+                """,
+                stock_code,
+                limit,
+            )
+
+        return [
+            FinancialData(
+                stock_code=row["stock_code"],
+                quarter=row["quarter"],
+                revenue=float(row["revenue"]) if row["revenue"] is not None else None,
+                operating_income=float(row["operating_income"])
+                if row["operating_income"] is not None
+                else None,
+                net_income=float(row["net_income"]) if row["net_income"] is not None else None,
+                per=float(row["per"]) if row["per"] is not None else None,
+                pbr=float(row["pbr"]) if row["pbr"] is not None else None,
+                roe=float(row["roe"]) if row["roe"] is not None else None,
+                debt_ratio=float(row["debt_ratio"]) if row["debt_ratio"] is not None else None,
+                eps=float(row["eps"]) if row["eps"] is not None else None,
+                bps=float(row["bps"]) if row["bps"] is not None else None,
+            )
+            for row in rows
+        ]
+
+    async def save_corp_code(self, stock_code: str, corp_code: str) -> None:
+        """Save DART corp_code for a stock.
+
+        Args:
+            stock_code: KRX stock code
+            corp_code: DART 8-digit company code
+        """
+        if not self.pool:
+            raise RuntimeError("Database not connected")
+
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE stocks SET corp_code = $1 WHERE stock_code = $2",
+                corp_code,
+                stock_code,
+            )
+        logger.debug(f"Saved corp_code {corp_code} for {stock_code}")
+
+    async def get_corp_code(self, stock_code: str) -> str | None:
+        """Get DART corp_code for a stock.
+
+        Args:
+            stock_code: KRX stock code
+
+        Returns:
+            DART corp_code or None if not found
+        """
+        if not self.pool:
+            raise RuntimeError("Database not connected")
+
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT corp_code FROM stocks WHERE stock_code = $1",
+                stock_code,
+            )
+
+        return row["corp_code"] if row and row["corp_code"] else None
