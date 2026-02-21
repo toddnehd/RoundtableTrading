@@ -203,8 +203,13 @@ class TestDartCollector:
     async def test_get_financial_data_calculates_per_pbr(self) -> None:
         from src.data.collectors.dart_collector import DartCollector
 
-        mock_accounts = [{"account_nm": "매출액", "thstrm_amount": "100000000000"}]
-        mock_indicators = {"eps": 5000.0, "bps": 50000.0}
+        mock_accounts = [
+            {"account_nm": "매출액", "thstrm_amount": "100000000000"},
+            {"account_nm": "당기순이익", "thstrm_amount": "50000000000"},
+            {"account_nm": "기본주당이익", "thstrm_amount": "5000"},
+            {"account_nm": "자본총계", "thstrm_amount": "500000000000"},
+        ]
+        mock_indicators: dict = {}
 
         collector = DartCollector(api_key="test_key")
         with patch.object(

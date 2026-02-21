@@ -52,9 +52,11 @@ class DartCollector:
             FinancialData or None if financial sector or no data
         """
         accounts: list[dict] = []
+        used_fs_div = "CFS"
         for fs_div in ("CFS", "OFS"):
             try:
                 accounts = await self._get_main_accounts(corp_code, bsns_year, reprt_code, fs_div)
+                used_fs_div = fs_div
                 break
             except DartNoDataError:
                 if fs_div == "OFS":
@@ -82,8 +84,9 @@ class DartCollector:
 
         roe = indicators.get("roe")
         debt_ratio = indicators.get("debt_ratio")
-        eps = indicators.get("eps")
-        bps = indicators.get("bps")
+
+        eps = self._extract_account_exact(accounts, "기본주당이익")
+        bps = self._calculate_bps(accounts)
 
         per: float | None = None
         pbr: float | None = None
@@ -104,6 +107,7 @@ class DartCollector:
             debt_ratio=debt_ratio,
             eps=eps,
             bps=bps,
+            fs_div=used_fs_div,
         )
 
     async def _get_main_accounts(
@@ -162,14 +166,10 @@ class DartCollector:
                         val = float(str(idx_val).replace(",", ""))
                     except (ValueError, TypeError):
                         continue
-                    if "자기자본이익률" in idx_nm or "ROE" in idx_nm:
+                    if idx_nm == "ROE" or idx_nm == "자기자본이익률":
                         result["roe"] = val
-                    elif "부채비율" in idx_nm:
+                    elif idx_nm == "부채비율":
                         result["debt_ratio"] = val
-                    elif "주당순이익" in idx_nm or "EPS" in idx_nm:
-                        result["eps"] = val
-                    elif "주당순자산" in idx_nm or "BPS" in idx_nm:
-                        result["bps"] = val
             except (DartNoDataError, DartAPIError):
                 pass
         return result
@@ -235,4 +235,45 @@ class DartCollector:
                     return float(str(val_str).replace(",", ""))
                 except (ValueError, TypeError):
                     return None
+        return None
+
+    def _extract_account_exact(self, accounts: list[dict], account_name: str) -> float | None:
+        """Extract account value by exact name match.
+
+        Args:
+            accounts: List of account dicts
+            account_name: Exact account name to match
+
+        Returns:
+            Account value as float or None
+        """
+        for item in accounts:
+            if item.get("account_nm", "") == account_name:
+                val_str = item.get("thstrm_amount", "")
+                try:
+                    return float(str(val_str).replace(",", ""))
+                except (ValueError, TypeError):
+                    return None
+        return None
+
+    def _calculate_bps(self, accounts: list[dict]) -> float | None:
+        """Calculate BPS from equity total and shares outstanding.
+
+        BPS = 자본총계 / 발행주식수
+        발행주식수 = 당기순이익 / 기본주당이익(EPS)
+
+        Args:
+            accounts: List of account dicts from DART API
+
+        Returns:
+            BPS as float or None if calculation not possible
+        """
+        equity = self._extract_account_exact(accounts, "자본총계")
+        eps = self._extract_account_exact(accounts, "기본주당이익")
+        net_income = self._extract_account(accounts, "당기순이익")
+
+        if equity and eps and net_income and eps > 0 and net_income > 0:
+            shares = net_income / eps
+            if shares > 0:
+                return round(equity / shares, 0)
         return None

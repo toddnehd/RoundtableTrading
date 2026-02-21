@@ -43,3 +43,4 @@ class FinancialData:
     debt_ratio: float | None = None  # 부채비율
     eps: float | None = None
     bps: float | None = None
+    fs_div: str | None = None  # Financial statement division: 'CFS' or 'OFS'

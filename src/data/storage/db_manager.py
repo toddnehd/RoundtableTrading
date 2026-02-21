@@ -158,8 +158,8 @@ class DatabaseManager:
                 """
                 INSERT INTO financial_data
                     (stock_code, quarter, revenue, operating_income, net_income,
-                     per, pbr, roe, debt_ratio, eps, bps, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+                     per, pbr, roe, debt_ratio, eps, bps, fs_div, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
                 ON CONFLICT (stock_code, quarter) DO UPDATE
                 SET revenue = EXCLUDED.revenue,
                     operating_income = EXCLUDED.operating_income,
@@ -170,6 +170,7 @@ class DatabaseManager:
                     debt_ratio = EXCLUDED.debt_ratio,
                     eps = EXCLUDED.eps,
                     bps = EXCLUDED.bps,
+                    fs_div = EXCLUDED.fs_div,
                     updated_at = NOW()
                 """,
                 [
@@ -185,6 +186,7 @@ class DatabaseManager:
                         f.debt_ratio,
                         f.eps,
                         f.bps,
+                        f.fs_div,
                     )
                     for f in financials
                 ],
@@ -208,7 +210,7 @@ class DatabaseManager:
             rows = await conn.fetch(
                 """
                 SELECT stock_code, quarter, revenue, operating_income, net_income,
-                       per, pbr, roe, debt_ratio, eps, bps
+                       per, pbr, roe, debt_ratio, eps, bps, fs_div
                 FROM financial_data
                 WHERE stock_code = $1
                 ORDER BY quarter DESC
@@ -233,6 +235,7 @@ class DatabaseManager:
                 debt_ratio=float(row["debt_ratio"]) if row["debt_ratio"] is not None else None,
                 eps=float(row["eps"]) if row["eps"] is not None else None,
                 bps=float(row["bps"]) if row["bps"] is not None else None,
+                fs_div=row["fs_div"],
             )
             for row in rows
         ]
