@@ -48,12 +48,12 @@ async def main():
 
             if result.latest_price:
                 price = result.latest_price
-                print(f"           Close: {price.close_price:,} | " f"Volume: {price.volume:,}")
+                print(f"           Close: {price.close_price:,} | Volume: {price.volume:,}")
 
             if result.metrics:
                 vol_ratio = result.metrics.get("volume_ratio", 0)
                 change_5d = result.metrics.get("price_change_5d_pct", 0)
-                print(f"           Vol Ratio: {vol_ratio:.2f}x | " f"5D Change: {change_5d:+.2f}%")
+                print(f"           Vol Ratio: {vol_ratio:.2f}x | 5D Change: {change_5d:+.2f}%")
             print("-" * 80)
 
         print("\n=== Screening Complete ===")
