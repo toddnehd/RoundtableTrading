@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional
 
 
 @dataclass
@@ -10,8 +9,8 @@ class Stock:
     stock_code: str
     stock_name: str
     market: str  # 'KOSPI' or 'KOSDAQ'
-    sector: Optional[str] = None
-    industry: Optional[str] = None
+    sector: str | None = None
+    industry: str | None = None
 
 
 @dataclass
@@ -25,8 +24,8 @@ class DailyPrice:
     low_price: int
     close_price: int
     volume: int
-    trading_value: Optional[int] = None
-    market_cap: Optional[int] = None
+    trading_value: int | None = None
+    market_cap: int | None = None
 
 
 @dataclass
@@ -35,10 +34,12 @@ class FinancialData:
 
     stock_code: str
     quarter: str  # '2024Q3'
-    revenue: Optional[float] = None
-    operating_income: Optional[float] = None
-    net_income: Optional[float] = None
-    per: Optional[float] = None  # 주가수익비율
-    pbr: Optional[float] = None  # 주가순자산비율
-    roe: Optional[float] = None  # 자기자본이익률
-    debt_ratio: Optional[float] = None  # 부채비율
+    revenue: float | None = None
+    operating_income: float | None = None
+    net_income: float | None = None
+    per: float | None = None  # 주가수익비율
+    pbr: float | None = None  # 주가순자산비율
+    roe: float | None = None  # 자기자본이익률
+    debt_ratio: float | None = None  # 부채비율
+    eps: float | None = None
+    bps: float | None = None

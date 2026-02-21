@@ -1,6 +1,6 @@
 from datetime import date
 
-from src.data.models import DailyPrice, Stock
+from src.data.models import DailyPrice, FinancialData, Stock
 
 
 def test_stock_creation():
@@ -43,3 +43,26 @@ def test_daily_price_with_optional_fields():
 
     assert price.trading_value == 750000000000
     assert price.market_cap == 450000000000000
+
+
+def test_financial_data_with_eps_bps():
+    f = FinancialData(
+        stock_code="005930",
+        quarter="2024Q4",
+        eps=5000.0,
+        bps=50000.0,
+        revenue=300_000_000_000_000.0,
+    )
+
+    assert f.eps == 5000.0
+    assert f.bps == 50000.0
+    assert f.revenue == 300_000_000_000_000.0
+    assert f.per is None  # 기본값 None 확인
+
+
+def test_financial_data_defaults_none():
+    f = FinancialData(stock_code="000660", quarter="2024Q3")
+
+    assert f.eps is None
+    assert f.bps is None
+    assert f.roe is None
