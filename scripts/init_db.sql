@@ -184,3 +184,34 @@ CREATE TRIGGER update_stocks_updated_at BEFORE UPDATE ON stocks
 -- Apply trigger to system_metadata table
 CREATE TRIGGER update_system_metadata_updated_at BEFORE UPDATE ON system_metadata
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- stocks 테이블에 corp_code 컬럼 추가
+ALTER TABLE stocks ADD COLUMN IF NOT EXISTS corp_code VARCHAR(8);
+CREATE INDEX IF NOT EXISTS idx_stocks_corp_code ON stocks(corp_code);
+
+-- financial_data 테이블 생성
+CREATE TABLE IF NOT EXISTS financial_data (
+    id                  SERIAL PRIMARY KEY,
+    stock_code          VARCHAR(10) NOT NULL,
+    quarter             VARCHAR(10) NOT NULL,
+    revenue             NUMERIC,
+    operating_income    NUMERIC,
+    net_income          NUMERIC,
+    per                 NUMERIC,
+    pbr                 NUMERIC,
+    roe                 NUMERIC,
+    debt_ratio          NUMERIC,
+    eps                 NUMERIC,
+    bps                 NUMERIC,
+    fs_div              VARCHAR(3),
+    created_at          TIMESTAMPTZ DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (stock_code, quarter),
+    FOREIGN KEY (stock_code) REFERENCES stocks(stock_code) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_financial_data_stock_quarter
+    ON financial_data(stock_code, quarter DESC);
+
+-- Apply trigger to financial_data table
+CREATE TRIGGER update_financial_data_updated_at BEFORE UPDATE ON financial_data
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

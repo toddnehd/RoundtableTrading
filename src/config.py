@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     kis_app_secret: str = ""
     kis_account_number: str = ""
 
+    dart_api_key: str = ""
+
     backtest_start_date: str = "2020-01-01"
     backtest_initial_capital: int = 10_000_000
 
