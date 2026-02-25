@@ -54,7 +54,12 @@ secrets.json
 
 # Local documentation (managed locally only)
 AGENTS.md
+SKILL.md
+skills-lock.json
 doc/
 
 # OpenCode local agent configs (managed locally only)
 .opencode/
+
+# Sisyphus
+.sisyphus/
