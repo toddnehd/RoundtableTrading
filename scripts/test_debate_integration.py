@@ -55,56 +55,33 @@ def create_sample_data() -> AnalysisData:
 
 async def load_data_from_db(stock_code: str) -> AnalysisData | None:
     try:
-        from src.data.storage.db_manager import DatabaseManager
+        import asyncpg
 
-        db = DatabaseManager()
-        await db.connect()
+        from src.config import settings
+        from src.data.collectors.pykrx_collector import PyKrxCollector
+        from src.data.storage import (
+            FinancialRepository,
+            PriceRepository,
+            StockRepository,
+        )
 
-        if not db.pool:
-            return None
-
+        pool = await asyncpg.create_pool(settings.database_url)
         try:
-            async with db.pool.acquire() as conn:
-                stock = await conn.fetchrow(
-                    "SELECT stock_code, stock_name FROM stocks WHERE stock_code = $1",
-                    stock_code,
-                )
-                if not stock:
-                    logger.error(f"종목 {stock_code} 없음")
-                    return None
+            stock_repo = StockRepository(pool)
+            price_repo = PriceRepository(pool, PyKrxCollector())
+            financial_repo = FinancialRepository(pool)
 
-                rows = await conn.fetch(
-                    """
-                    SELECT stock_code, date, open_price, high_price, low_price,
-                           close_price, volume, market_cap
-                    FROM daily_prices
-                    WHERE stock_code = $1
-                    ORDER BY date DESC
-                    LIMIT 60
-                    """,
-                    stock_code,
-                )
+            stock = await stock_repo.get(stock_code)
+            if not stock:
+                logger.error(f"종목 {stock_code} 없음")
+                return None
 
-                if not rows:
-                    logger.error(f"{stock_code} 가격 데이터 없음")
-                    return None
+            prices = await price_repo.get_recent(stock_code, days=60)
+            if not prices:
+                logger.error(f"{stock_code} 가격 데이터 없음")
+                return None
 
-                prices = [
-                    DailyPrice(
-                        stock_code=row["stock_code"],
-                        date=row["date"],
-                        open_price=row["open_price"],
-                        high_price=row["high_price"],
-                        low_price=row["low_price"],
-                        close_price=row["close_price"],
-                        volume=row["volume"],
-                        market_cap=row["market_cap"],
-                    )
-                    for row in reversed(rows)
-                ]
-
-            # financial_data 로드
-            financials = await db.get_financial_data(stock_code, limit=8)
+            financials = await financial_repo.get_recent(stock_code, limit=8)
             if financials:
                 logger.info(f"{stock_code} 재무 데이터 {len(financials)}건 로드")
             else:
@@ -113,13 +90,14 @@ async def load_data_from_db(stock_code: str) -> AnalysisData | None:
                 )
 
             return AnalysisData(
-                stock_code=stock["stock_code"],
-                stock_name=stock["stock_name"],
+                stock_code=stock.stock_code,
+                stock_name=stock.stock_name,
                 prices=prices,
                 financials=financials,
+                analysis_date=prices[-1].date,
             )
         finally:
-            await db.close()
+            await pool.close()
 
     except Exception as e:
         logger.warning(f"DB 로드 실패: {e}")

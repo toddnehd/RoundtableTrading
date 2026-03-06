@@ -57,62 +57,35 @@ def create_sample_data() -> AnalysisData:
 async def load_data_from_db(stock_code: str) -> AnalysisData | None:
     """Load real data from database."""
     try:
-        from src.data.storage.db_manager import DatabaseManager
+        import asyncpg
 
-        db = DatabaseManager()
-        await db.connect()
+        from src.config import settings
+        from src.data.collectors.pykrx_collector import PyKrxCollector
+        from src.data.storage import PriceRepository, StockRepository
 
-        if not db.pool:
-            logger.error("Database pool not initialized")
-            return None
-
+        pool = await asyncpg.create_pool(settings.database_url)
         try:
-            async with db.pool.acquire() as conn:
-                stock = await conn.fetchrow(
-                    "SELECT stock_code, stock_name FROM stocks WHERE stock_code = $1",
-                    stock_code,
-                )
+            stock_repo = StockRepository(pool)
+            price_repo = PriceRepository(pool, PyKrxCollector())
 
-                if not stock:
-                    logger.error(f"Stock {stock_code} not found in database")
-                    return None
+            stock = await stock_repo.get(stock_code)
+            if not stock:
+                logger.error(f"Stock {stock_code} not found in database")
+                return None
 
-                rows = await conn.fetch(
-                    """
-                    SELECT stock_code, date, open_price, high_price, low_price,
-                           close_price, volume
-                    FROM daily_prices
-                    WHERE stock_code = $1
-                    ORDER BY date DESC
-                    LIMIT 60
-                    """,
-                    stock_code,
-                )
+            prices = await price_repo.get_recent(stock_code, days=60)
+            if not prices:
+                logger.error(f"No price data for {stock_code}")
+                return None
 
-                if not rows:
-                    logger.error(f"No price data for {stock_code}")
-                    return None
-
-                prices = [
-                    DailyPrice(
-                        stock_code=row["stock_code"],
-                        date=row["date"],
-                        open_price=row["open_price"],
-                        high_price=row["high_price"],
-                        low_price=row["low_price"],
-                        close_price=row["close_price"],
-                        volume=row["volume"],
-                    )
-                    for row in reversed(rows)
-                ]
-
-                return AnalysisData(
-                    stock_code=stock["stock_code"],
-                    stock_name=stock["stock_name"],
-                    prices=prices,
-                )
+            return AnalysisData(
+                stock_code=stock.stock_code,
+                stock_name=stock.stock_name,
+                prices=prices,
+                analysis_date=prices[-1].date,
+            )
         finally:
-            await db.close()
+            await pool.close()
 
     except Exception as e:
         logger.warning(f"Failed to load from DB: {e}")
