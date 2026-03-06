@@ -4,6 +4,7 @@ from src.agents.base import (
     AnalysisData,
     BaseAgent,
     Opinion,
+    format_analysis_date,
 )
 from src.agents.fundamental import FundamentalAnalysisAgent
 from src.agents.market import MarketSentimentAgent
@@ -22,4 +23,5 @@ __all__ = [
     "Opinion",
     "RiskAssessmentAgent",
     "TechnicalAnalysisAgent",
+    "format_analysis_date",
 ]

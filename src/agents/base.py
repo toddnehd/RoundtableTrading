@@ -6,7 +6,7 @@ along with common data types used across agents.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 
 from loguru import logger
@@ -33,6 +33,7 @@ class AnalysisData:
         prices: List of daily price data.
         financials: List of financial data (optional).
         metadata: Additional context data.
+        analysis_date: Date of the latest DB data used for analysis. Defaults to today if None.
     """
 
     stock_code: str
@@ -40,6 +41,16 @@ class AnalysisData:
     prices: list[DailyPrice] = field(default_factory=list)
     financials: list[FinancialData] = field(default_factory=list)
     metadata: dict[str, str] = field(default_factory=dict)
+    analysis_date: date | None = None
+
+
+def format_analysis_date(data: "AnalysisData") -> str:
+    today = datetime.now().date()
+    ref = data.analysis_date if data.analysis_date else today
+    lag = (today - ref).days
+    if lag == 0:
+        return ref.strftime("%Y년 %m월 %d일 (오늘)")
+    return ref.strftime(f"%Y년 %m월 %d일 (오늘로부터 {lag}일 전 데이터 기준)")
 
 
 @dataclass

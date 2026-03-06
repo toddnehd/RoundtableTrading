@@ -9,6 +9,7 @@ from src.agents.base import (
     AnalysisData,
     BaseAgent,
     Opinion,
+    format_analysis_date,
 )
 from src.agents.llm.base import LLMClient
 
@@ -80,7 +81,10 @@ class MarketSentimentAgent(BaseAgent):
         price_trend = self._analyze_price_trend(data.prices) if data.prices else "N/A"
         volume_trend = self._analyze_volume_trend(data.prices) if data.prices else "N/A"
 
-        prompt = f"""## 분석 대상
+        prompt = f"""## 분석 기준일
+{format_analysis_date(data)}
+
+## 분석 대상
 종목: {data.stock_name} ({data.stock_code})
 시장: {market}
 섹터: {sector}
@@ -95,8 +99,8 @@ class MarketSentimentAgent(BaseAgent):
 ## 메타데이터
 {self._format_metadata(data.metadata)}
 
-시장 환경과 섹터 동향을 고려하여 지정된 형식으로 의견을 제시하세요.
-현재 시장 상황에 대한 가정을 명시하고 분석하세요.
+위 분석 기준일을 기준으로 시장 환경과 섹터 동향을 평가하세요.
+시장 상황에 대한 가정을 명시하고, 해당 날짜 이후의 추가 정보는 없다고 가정하여 분석하세요.
 """
         return prompt
 
