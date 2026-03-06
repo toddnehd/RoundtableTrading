@@ -9,6 +9,7 @@ from src.agents.base import (
     AnalysisData,
     BaseAgent,
     Opinion,
+    format_analysis_date,
 )
 from src.agents.llm.base import LLMClient
 
@@ -84,7 +85,10 @@ class FundamentalAnalysisAgent(BaseAgent):
 
         current_price = data.prices[-1].close_price if data.prices else 0
 
-        prompt = f"""## 분석 대상
+        prompt = f"""## 분석 기준일
+{format_analysis_date(data)}
+
+## 분석 대상
 종목: {data.stock_name} ({data.stock_code})
 현재가: {current_price:,}원
 
@@ -113,7 +117,10 @@ class FundamentalAnalysisAgent(BaseAgent):
         current_price = data.prices[-1].close_price if data.prices else 0
         market_cap = data.prices[-1].market_cap if data.prices else None
 
-        prompt = f"""## 분석 대상
+        prompt = f"""## 분석 기준일
+{format_analysis_date(data)}
+
+## 분석 대상
 종목: {data.stock_name} ({data.stock_code})
 현재가: {current_price:,}원
 시가총액: {self._format_billions(market_cap)}

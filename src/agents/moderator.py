@@ -9,6 +9,7 @@ from src.agents.base import (
     AnalysisData,
     BaseAgent,
     Opinion,
+    format_analysis_date,
 )
 from src.agents.llm.base import LLMClient
 
@@ -63,7 +64,10 @@ class ModeratorAgent(BaseAgent):
 
         opinions_text = self._format_opinions()
 
-        prompt = f"""## 분석 대상
+        prompt = f"""## 분석 기준일
+{format_analysis_date(data)}
+
+## 분석 대상
 종목: {data.stock_name} ({data.stock_code})
 현재가: {current_price:,}원
 
