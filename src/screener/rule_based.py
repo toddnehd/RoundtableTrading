@@ -4,18 +4,25 @@ Screens stocks using SQL queries and pandas calculations.
 No LLM required - pure algorithmic filtering.
 """
 
+from __future__ import annotations
+
 from datetime import date, timedelta
+from typing import TYPE_CHECKING
 
 import asyncpg
 from loguru import logger
 
 from src.config import settings
-from src.data.models import DailyPrice
+from src.data.freshness import get_collectible_end_date
+from src.data.storage import PriceRepository
 from src.screener.models import (
     ScreeningCriteria,
     ScreeningReason,
     ScreeningResult,
 )
+
+if TYPE_CHECKING:
+    from src.data.collectors.pykrx_collector import PyKrxCollector
 
 
 class RuleBasedScreener:
@@ -25,8 +32,13 @@ class RuleBasedScreener:
     technical and volume criteria directly from database.
     """
 
-    def __init__(self, pool: asyncpg.Pool | None = None):
+    def __init__(
+        self,
+        pool: asyncpg.Pool | None = None,
+        collector: PyKrxCollector | None = None,
+    ):
         self._pool = pool
+        self._collector = collector
         self._own_pool = False
 
     async def connect(self) -> None:
@@ -59,7 +71,7 @@ class RuleBasedScreener:
         if not self._pool:
             raise RuntimeError("Screener not connected. Call connect() first.")
 
-        end_date = date.today()
+        end_date = get_collectible_end_date()
         start_date = end_date - timedelta(days=criteria.lookback_days + 10)
 
         async with self._pool.acquire() as conn:
@@ -164,7 +176,8 @@ class RuleBasedScreener:
         results = []
         stock_codes = [c["stock_code"] for c in candidates]
 
-        price_data = await self._fetch_price_history(conn, stock_codes, start_date, end_date)
+        price_repo = PriceRepository(self._pool, self._collector)
+        price_data = await price_repo.get_bulk(stock_codes, start_date, end_date)
 
         for candidate in candidates:
             stock_code = candidate["stock_code"]
@@ -197,48 +210,7 @@ class RuleBasedScreener:
 
         return results
 
-    async def _fetch_price_history(
-        self,
-        conn: asyncpg.Connection,
-        stock_codes: list[str],
-        start_date: date,
-        end_date: date,
-    ) -> dict[str, list[DailyPrice]]:
-        """Fetch price history for multiple stocks."""
-        query = """
-            SELECT
-                stock_code, date, open_price, high_price, low_price,
-                close_price, volume, trading_value, market_cap
-            FROM daily_prices
-            WHERE stock_code = ANY($1)
-                AND date BETWEEN $2 AND $3
-            ORDER BY stock_code, date DESC
-        """
-
-        rows = await conn.fetch(query, stock_codes, start_date, end_date)
-
-        result: dict[str, list[DailyPrice]] = {}
-        for row in rows:
-            code = row["stock_code"]
-            if code not in result:
-                result[code] = []
-            result[code].append(
-                DailyPrice(
-                    stock_code=code,
-                    date=row["date"],
-                    open_price=row["open_price"],
-                    high_price=row["high_price"],
-                    low_price=row["low_price"],
-                    close_price=row["close_price"],
-                    volume=row["volume"],
-                    trading_value=row["trading_value"],
-                    market_cap=row["market_cap"],
-                )
-            )
-
-        return result
-
-    def _compute_technical_metrics(self, prices: list[DailyPrice]) -> dict[str, float]:
+    def _compute_technical_metrics(self, prices: list) -> dict[str, float]:
         """Compute technical metrics from price data."""
         closes = [p.close_price for p in prices]
         volumes = [p.volume for p in prices]
