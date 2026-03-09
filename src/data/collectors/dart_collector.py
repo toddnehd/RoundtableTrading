@@ -12,6 +12,11 @@ from src.data.models import FinancialData
 
 DART_BASE_URL = "https://opendart.fss.or.kr/api"
 
+# 계정명 복수 매칭 — 기업마다 표준화되지 않은 계정명 처리
+REVENUE_NAMES = ["매출액", "영업수익", "보험료수익", "이자수익", "수익(매출액)"]
+NET_INCOME_NAMES = ["당기순이익", "분기순이익", "당기순이익(손실)"]
+OPERATING_INCOME_NAMES = ["영업이익", "영업이익(손실)"]
+
 REPRT_CODE_TO_QUARTER = {
     "11013": "Q1",
     "11012": "Q2",
@@ -78,9 +83,9 @@ class DartCollector:
         quarter_suffix = REPRT_CODE_TO_QUARTER.get(reprt_code, "Q4")
         quarter = f"{bsns_year}{quarter_suffix}"
 
-        revenue = self._extract_account(accounts, "매출액")
-        operating_income = self._extract_account(accounts, "영업이익")
-        net_income = self._extract_account(accounts, "당기순이익")
+        revenue = self._extract_account_any(accounts, REVENUE_NAMES)
+        operating_income = self._extract_account_any(accounts, OPERATING_INCOME_NAMES)
+        net_income = self._extract_account_any(accounts, NET_INCOME_NAMES)
 
         roe = indicators.get("roe")
         debt_ratio = indicators.get("debt_ratio")
@@ -95,6 +100,8 @@ class DartCollector:
         if current_price and bps and bps > 0:
             pbr = round(current_price / bps, 2)
 
+        derived = self._calculate_derived_metrics(accounts, indicators, current_price)
+
         return FinancialData(
             stock_code=stock_code,
             quarter=quarter,
@@ -108,6 +115,7 @@ class DartCollector:
             eps=eps,
             bps=bps,
             fs_div=used_fs_div,
+            **derived,
         )
 
     async def _get_main_accounts(
@@ -148,7 +156,7 @@ class DartCollector:
             dict with keys: roe, debt_ratio, eps, bps
         """
         result: dict = {}
-        for idx_cl_code in ("M210000", "M220000"):
+        for idx_cl_code in ("M210000", "M220000", "M230000", "M240000"):
             try:
                 items = await self._call_api(
                     "fnlttSinglIndx.json",
@@ -170,6 +178,12 @@ class DartCollector:
                         result["roe"] = val
                     elif idx_nm == "부채비율":
                         result["debt_ratio"] = val
+                    elif "배당수익률" in idx_nm:
+                        result["dividend_yield"] = val
+                    elif "주당배당금" in idx_nm or idx_nm == "DPS":
+                        result["dps"] = val
+                    elif "EPS" in idx_nm or "주당순이익" in idx_nm:
+                        result["eps_from_indicator"] = val
             except (DartNoDataError, DartAPIError):
                 pass
         return result
@@ -205,18 +219,9 @@ class DartCollector:
         return parse_dart_response(response.json())
 
     def _is_financial_sector(self, accounts: list[dict]) -> bool:
-        """Detect if company is in financial sector.
-
-        Financial sector companies don't have '매출액' account.
-
-        Args:
-            accounts: List of account dicts from DART API
-
-        Returns:
-            True if financial sector (no revenue account found)
-        """
+        """Detect if company is in financial sector."""
         account_names = [item.get("account_nm", "") for item in accounts]
-        return not any("매출액" in name for name in account_names)
+        return not any(rev_name in name for name in account_names for rev_name in REVENUE_NAMES)
 
     def _extract_account(self, accounts: list[dict], account_name: str) -> float | None:
         """Extract account value by name.
@@ -231,6 +236,25 @@ class DartCollector:
         for item in accounts:
             if account_name in item.get("account_nm", ""):
                 val_str = item.get("thstrm_amount", "")
+                try:
+                    return float(str(val_str).replace(",", ""))
+                except (ValueError, TypeError):
+                    return None
+        return None
+
+    def _extract_account_any(self, accounts: list[dict], names: list[str]) -> float | None:
+        """Extract account value matching any name in the list."""
+        for name in names:
+            result = self._extract_account(accounts, name)
+            if result is not None:
+                return result
+        return None
+
+    def _extract_prev_account(self, accounts: list[dict], account_name: str) -> float | None:
+        """Extract prior-term account value using frmtrm_amount."""
+        for item in accounts:
+            if account_name in item.get("account_nm", ""):
+                val_str = item.get("frmtrm_amount", "")
                 try:
                     return float(str(val_str).replace(",", ""))
                 except (ValueError, TypeError):
@@ -277,3 +301,106 @@ class DartCollector:
             if shares > 0:
                 return round(equity / shares, 0)
         return None
+
+    def _calculate_derived_metrics(
+        self,
+        accounts: list[dict],
+        indicators: dict,
+        current_price: int | None,
+    ) -> dict[str, float | None]:
+        """Calculate 14 extended FinancialData fields from raw accounts."""
+        revenue = self._extract_account_any(accounts, REVENUE_NAMES)
+        operating_income = self._extract_account_any(accounts, OPERATING_INCOME_NAMES)
+        net_income = self._extract_account_any(accounts, NET_INCOME_NAMES)
+        total_assets = self._extract_account_exact(accounts, "자산총계")
+        depreciation = self._extract_account(accounts, "감가상각비")
+        current_assets = self._extract_account(accounts, "유동자산")
+        current_liabilities = self._extract_account(accounts, "유동부채")
+        inventory = self._extract_account(accounts, "재고자산")
+        interest_expense = self._extract_account(accounts, "이자비용")
+        retained_earnings = self._extract_account(accounts, "이익잉여금")
+        capital = self._extract_account(accounts, "자본금")
+
+        prev_revenue = self._extract_prev_account(accounts, "매출액") or self._extract_prev_account(
+            accounts, "영업수익"
+        )
+        prev_operating_income = self._extract_prev_account(accounts, "영업이익")
+        prev_net_income = self._extract_prev_account(
+            accounts, "당기순이익"
+        ) or self._extract_prev_account(accounts, "분기순이익")
+
+        def growth_rate(current: float | None, prev: float | None) -> float | None:
+            if current is None or prev is None or prev == 0:
+                return None
+            return round((current - prev) / abs(prev) * 100, 2)
+
+        operating_margin = (
+            round(operating_income / revenue * 100, 2) if revenue and operating_income else None
+        )
+        net_margin = round(net_income / revenue * 100, 2) if revenue and net_income else None
+        roa = round(net_income / total_assets * 100, 2) if net_income and total_assets else None
+        ebitda = (
+            (operating_income + depreciation)
+            if operating_income is not None and depreciation is not None
+            else operating_income
+        )
+        current_ratio = (
+            round(current_assets / current_liabilities * 100, 2)
+            if current_assets and current_liabilities
+            else None
+        )
+        quick_ratio = (
+            round((current_assets - (inventory or 0)) / current_liabilities * 100, 2)
+            if current_assets and current_liabilities
+            else None
+        )
+        interest_coverage = (
+            round(operating_income / interest_expense, 2)
+            if operating_income and interest_expense and interest_expense != 0
+            else None
+        )
+        capital_retention_ratio = (
+            round(retained_earnings / capital * 100, 2)
+            if retained_earnings and capital and capital != 0
+            else None
+        )
+
+        # EV/EBITDA = 시가총액 / EBITDA (발행주식수 = 당기순이익 / EPS)
+        ev_ebitda: float | None = None
+        eps = self._extract_account_exact(accounts, "기본주당이익")
+        if (
+            current_price
+            and eps
+            and eps > 0
+            and net_income
+            and net_income > 0
+            and ebitda
+            and ebitda > 0
+        ):
+            shares = net_income / eps
+            market_cap = current_price * shares
+            ev_ebitda = round(market_cap / ebitda, 2)
+
+        dps = indicators.get("dps")
+        dividend_yield = indicators.get("dividend_yield")
+        if dps is None:
+            dps = self._extract_account(accounts, "주당배당금")
+        if dividend_yield is None and dps and current_price:
+            dividend_yield = round(dps / current_price * 100, 2)
+
+        return {
+            "operating_margin": operating_margin,
+            "net_margin": net_margin,
+            "roa": roa,
+            "ebitda": ebitda,
+            "current_ratio": current_ratio,
+            "quick_ratio": quick_ratio,
+            "interest_coverage": interest_coverage,
+            "capital_retention_ratio": capital_retention_ratio,
+            "ev_ebitda": ev_ebitda,
+            "dps": dps,
+            "dividend_yield": dividend_yield,
+            "revenue_growth": growth_rate(revenue, prev_revenue),
+            "operating_income_growth": growth_rate(operating_income, prev_operating_income),
+            "net_income_growth": growth_rate(net_income, prev_net_income),
+        }
