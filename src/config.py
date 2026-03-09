@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     kis_app_key: str = ""
     kis_app_secret: str = ""
     kis_account_number: str = ""
+    kis_is_virtual: bool = False
 
     dart_api_key: str = ""
     ecos_api_key: str = ""
