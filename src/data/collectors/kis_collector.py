@@ -1,3 +1,5 @@
+import json
+import os
 from datetime import date as date_type
 from datetime import datetime, timedelta
 
@@ -11,9 +13,11 @@ _REAL_BASE = "https://openapi.koreainvestment.com:9443"
 _VIRTUAL_BASE = "https://openapivts.koreainvestment.com:29443"
 
 _INVESTOR_TR_ID = "FHKST01010900"
-_INDEX_TR_ID = "FHKST03010100"
+_INDEX_TR_ID = "FHKUP03500100"
 _KOSPI_CODE = "0001"
-_KOSDAQ_CODE = "0002"
+_KOSDAQ_CODE = "1001"
+
+_TOKEN_CACHE_PATH = "/tmp/kis_token_cache.json"
 
 
 class KisCollector:
@@ -21,12 +25,34 @@ class KisCollector:
 
     투자자별 매매동향과 KOSPI/KOSDAQ 지수 OHLCV를 제공.
     KRX 직접 스크래핑 차단(2026년~) 이후 공식 대체 수단.
+    토큰 유효기간 1일 — 파일 캐시로 프로세스 재시작 시 재사용.
     """
 
     def __init__(self) -> None:
         self._base = _VIRTUAL_BASE if settings.kis_is_virtual else _REAL_BASE
         self._token: str | None = None
         self._token_expires_at: datetime | None = None
+        self._load_token_cache()
+
+    def _load_token_cache(self) -> None:
+        try:
+            if os.path.exists(_TOKEN_CACHE_PATH):
+                with open(_TOKEN_CACHE_PATH) as f:
+                    cache = json.load(f)
+                expires_at = datetime.fromisoformat(cache["expires_at"])
+                if datetime.now() < expires_at:
+                    self._token = cache["token"]
+                    self._token_expires_at = expires_at
+                    logger.debug("KIS token loaded from cache")
+        except Exception:
+            pass
+
+    def _save_token_cache(self, token: str, expires_at: datetime) -> None:
+        try:
+            with open(_TOKEN_CACHE_PATH, "w") as f:
+                json.dump({"token": token, "expires_at": expires_at.isoformat()}, f)
+        except Exception:
+            pass
 
     def _is_configured(self) -> bool:
         return bool(settings.kis_app_key and settings.kis_app_secret)
@@ -43,8 +69,10 @@ class KisCollector:
         resp.raise_for_status()
         data = resp.json()
         token: str = data["access_token"]
+        expires_at = datetime.now() + timedelta(hours=23, minutes=55)
         self._token = token
-        self._token_expires_at = datetime.now() + timedelta(hours=23, minutes=55)
+        self._token_expires_at = expires_at
+        self._save_token_cache(token, expires_at)
         logger.info("KIS access token issued")
         return token
 
@@ -127,7 +155,7 @@ class KisCollector:
     ) -> list[tuple[date_type, float, float]]:
         """KIS API로 KOSPI/KOSDAQ 일별 지수 종가 조회.
 
-        TR_ID FHKST03010100 — 최대 100건/회.
+        TR_ID FHKUP03500100 — 최대 50건/회.
         """
         if not self._is_configured():
             logger.warning("KIS API key not configured — skipping market index")
@@ -165,7 +193,7 @@ class KisCollector:
         end_date: str,
     ) -> dict[date_type, float]:
         resp = await client.get(
-            f"{self._base}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
+            f"{self._base}/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice",
             headers=self._auth_headers(token, _INDEX_TR_ID),
             params={
                 "FID_COND_MRKT_DIV_CODE": "U",
@@ -173,7 +201,6 @@ class KisCollector:
                 "FID_INPUT_DATE_1": start_date,
                 "FID_INPUT_DATE_2": end_date,
                 "FID_PERIOD_DIV_CODE": "D",
-                "FID_ORG_ADJ_PRC": "0",
             },
         )
         resp.raise_for_status()
@@ -185,13 +212,13 @@ class KisCollector:
 
         index_map: dict[date_type, float] = {}
         for item in data.get("output2", []):
-            raw_date = item.get("stck_bsop_date") or item.get("bsop_date", "")
-            raw_close = item.get("stck_clpr") or item.get("bstp_nmix_prpr", "")
+            raw_date = item.get("stck_bsop_date", "")
+            raw_close = item.get("bstp_nmix_prpr", "")
             if not raw_date or not raw_close:
                 continue
             try:
                 date_val = datetime.strptime(raw_date, "%Y%m%d").date()
-                index_map[date_val] = float(raw_close.replace(",", ""))
+                index_map[date_val] = float(str(raw_close).replace(",", ""))
             except (ValueError, AttributeError):
                 continue
 
