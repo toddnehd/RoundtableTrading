@@ -215,3 +215,61 @@ CREATE INDEX IF NOT EXISTS idx_financial_data_stock_quarter
 -- Apply trigger to financial_data table
 CREATE TRIGGER update_financial_data_updated_at BEFORE UPDATE ON financial_data
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- financial_data 테이블 14개 필드 확장
+ALTER TABLE financial_data
+  ADD COLUMN IF NOT EXISTS operating_margin NUMERIC,
+  ADD COLUMN IF NOT EXISTS net_margin NUMERIC,
+  ADD COLUMN IF NOT EXISTS roa NUMERIC,
+  ADD COLUMN IF NOT EXISTS ebitda NUMERIC,
+  ADD COLUMN IF NOT EXISTS current_ratio NUMERIC,
+  ADD COLUMN IF NOT EXISTS quick_ratio NUMERIC,
+  ADD COLUMN IF NOT EXISTS interest_coverage NUMERIC,
+  ADD COLUMN IF NOT EXISTS capital_retention_ratio NUMERIC,
+  ADD COLUMN IF NOT EXISTS ev_ebitda NUMERIC,
+  ADD COLUMN IF NOT EXISTS dps NUMERIC,
+  ADD COLUMN IF NOT EXISTS dividend_yield NUMERIC,
+  ADD COLUMN IF NOT EXISTS revenue_growth NUMERIC,
+  ADD COLUMN IF NOT EXISTS operating_income_growth NUMERIC,
+  ADD COLUMN IF NOT EXISTS net_income_growth NUMERIC;
+
+-- 거시경제 지표 테이블
+CREATE TABLE IF NOT EXISTS macro_indicators (
+  id         SERIAL PRIMARY KEY,
+  date       DATE NOT NULL UNIQUE,
+  base_rate  NUMERIC,
+  usd_krw    NUMERIC,
+  cpi_yoy    NUMERIC,
+  kospi      NUMERIC,
+  kosdaq     NUMERIC,
+  export_yoy NUMERIC,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_macro_indicators_date ON macro_indicators(date DESC);
+CREATE TRIGGER update_macro_indicators_updated_at BEFORE UPDATE ON macro_indicators
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- 투자자별 수급 테이블
+CREATE TABLE IF NOT EXISTS investor_trading (
+  id              SERIAL PRIMARY KEY,
+  stock_code      VARCHAR(10) NOT NULL,
+  date            DATE NOT NULL,
+  foreign_net     BIGINT,
+  institution_net BIGINT,
+  retail_net      BIGINT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (stock_code, date),
+  FOREIGN KEY (stock_code) REFERENCES stocks(stock_code) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_investor_trading_stock_date ON investor_trading(stock_code, date DESC);
+
+-- 시장 지수 테이블
+CREATE TABLE IF NOT EXISTS market_indices (
+  id         SERIAL PRIMARY KEY,
+  date       DATE NOT NULL UNIQUE,
+  kospi      NUMERIC,
+  kosdaq     NUMERIC,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_market_indices_date ON market_indices(date DESC);

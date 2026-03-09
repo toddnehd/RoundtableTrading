@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     kis_account_number: str = ""
 
     dart_api_key: str = ""
+    ecos_api_key: str = ""
+    naver_client_id: str = ""
+    naver_client_secret: str = ""
 
     backtest_start_date: str = "2020-01-01"
     backtest_initial_capital: int = 10_000_000

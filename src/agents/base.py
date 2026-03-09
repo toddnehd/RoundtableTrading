@@ -12,7 +12,14 @@ from enum import Enum
 from loguru import logger
 
 from src.agents.llm.base import LLMClient, LLMResponse
-from src.data.models import DailyPrice, FinancialData
+from src.data.models import (
+    DailyPrice,
+    Disclosure,
+    FinancialData,
+    InvestorFlow,
+    MacroSnapshot,
+    NewsItem,
+)
 
 
 class Opinion(str, Enum):
@@ -42,6 +49,10 @@ class AnalysisData:
     financials: list[FinancialData] = field(default_factory=list)
     metadata: dict[str, str] = field(default_factory=dict)
     analysis_date: date | None = None
+    macro: MacroSnapshot | None = None
+    investor_flow: list[InvestorFlow] = field(default_factory=list)
+    news_headlines: list[NewsItem] = field(default_factory=list)
+    disclosures: list[Disclosure] = field(default_factory=list)
 
 
 def format_analysis_date(data: "AnalysisData") -> str:
