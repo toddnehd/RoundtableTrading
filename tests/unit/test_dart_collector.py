@@ -183,8 +183,8 @@ class TestDartCollector:
         from src.data.collectors.dart_collector import DartCollector
 
         mock_accounts = [
-            {"account_nm": "이자수익", "thstrm_amount": "5000000000"},
-            {"account_nm": "수수료수익", "thstrm_amount": "1000000000"},
+            {"account_nm": "수수료수익", "thstrm_amount": "5000000000"},
+            {"account_nm": "유가증권평가이익", "thstrm_amount": "1000000000"},
         ]
 
         collector = DartCollector(api_key="test_key")
