@@ -56,6 +56,19 @@ class MacroRepository:
                 ],
             )
 
+    async def save_market_indices(self, data: list[tuple[date, float, float]]) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.executemany(
+                """
+                INSERT INTO market_indices (date, kospi, kosdaq)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (date) DO UPDATE
+                SET kospi = EXCLUDED.kospi,
+                    kosdaq = EXCLUDED.kosdaq
+                """,
+                data,
+            )
+
 
 def _row_to_macro(row: asyncpg.Record) -> MacroSnapshot:
     def _float(v: object) -> float | None:
