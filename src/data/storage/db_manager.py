@@ -1,8 +1,12 @@
+from __future__ import annotations
+
+from datetime import date
+
 import asyncpg
 from loguru import logger
 
 from src.config import settings
-from src.data.models import DailyPrice, FinancialData, Stock
+from src.data.models import DailyPrice, FinancialData, InvestorFlow, MacroSnapshot, Stock
 
 
 class DatabaseManager:
@@ -158,8 +162,15 @@ class DatabaseManager:
                 """
                 INSERT INTO financial_data
                     (stock_code, quarter, revenue, operating_income, net_income,
-                     per, pbr, roe, debt_ratio, eps, bps, fs_div, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+                     per, pbr, roe, debt_ratio, eps, bps, fs_div,
+                     operating_margin, net_margin, roa, ebitda,
+                     current_ratio, quick_ratio, interest_coverage, capital_retention_ratio,
+                     ev_ebitda, dps, dividend_yield,
+                     revenue_growth, operating_income_growth, net_income_growth,
+                     updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+                        $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23,
+                        $24, $25, $26, NOW())
                 ON CONFLICT (stock_code, quarter) DO UPDATE
                 SET revenue = EXCLUDED.revenue,
                     operating_income = EXCLUDED.operating_income,
@@ -171,6 +182,20 @@ class DatabaseManager:
                     eps = EXCLUDED.eps,
                     bps = EXCLUDED.bps,
                     fs_div = EXCLUDED.fs_div,
+                    operating_margin = EXCLUDED.operating_margin,
+                    net_margin = EXCLUDED.net_margin,
+                    roa = EXCLUDED.roa,
+                    ebitda = EXCLUDED.ebitda,
+                    current_ratio = EXCLUDED.current_ratio,
+                    quick_ratio = EXCLUDED.quick_ratio,
+                    interest_coverage = EXCLUDED.interest_coverage,
+                    capital_retention_ratio = EXCLUDED.capital_retention_ratio,
+                    ev_ebitda = EXCLUDED.ev_ebitda,
+                    dps = EXCLUDED.dps,
+                    dividend_yield = EXCLUDED.dividend_yield,
+                    revenue_growth = EXCLUDED.revenue_growth,
+                    operating_income_growth = EXCLUDED.operating_income_growth,
+                    net_income_growth = EXCLUDED.net_income_growth,
                     updated_at = NOW()
                 """,
                 [
@@ -187,6 +212,20 @@ class DatabaseManager:
                         f.eps,
                         f.bps,
                         f.fs_div,
+                        f.operating_margin,
+                        f.net_margin,
+                        f.roa,
+                        f.ebitda,
+                        f.current_ratio,
+                        f.quick_ratio,
+                        f.interest_coverage,
+                        f.capital_retention_ratio,
+                        f.ev_ebitda,
+                        f.dps,
+                        f.dividend_yield,
+                        f.revenue_growth,
+                        f.operating_income_growth,
+                        f.net_income_growth,
                     )
                     for f in financials
                 ],
@@ -210,7 +249,11 @@ class DatabaseManager:
             rows = await conn.fetch(
                 """
                 SELECT stock_code, quarter, revenue, operating_income, net_income,
-                       per, pbr, roe, debt_ratio, eps, bps, fs_div
+                       per, pbr, roe, debt_ratio, eps, bps, fs_div,
+                       operating_margin, net_margin, roa, ebitda,
+                       current_ratio, quick_ratio, interest_coverage, capital_retention_ratio,
+                       ev_ebitda, dps, dividend_yield,
+                       revenue_growth, operating_income_growth, net_income_growth
                 FROM financial_data
                 WHERE stock_code = $1
                 ORDER BY quarter DESC
@@ -220,22 +263,39 @@ class DatabaseManager:
                 limit,
             )
 
+        def _float(v: object) -> float | None:
+            if v is None:
+                return None
+            return float(v)  # type: ignore[arg-type]
+
         return [
             FinancialData(
                 stock_code=row["stock_code"],
                 quarter=row["quarter"],
-                revenue=float(row["revenue"]) if row["revenue"] is not None else None,
-                operating_income=float(row["operating_income"])
-                if row["operating_income"] is not None
-                else None,
-                net_income=float(row["net_income"]) if row["net_income"] is not None else None,
-                per=float(row["per"]) if row["per"] is not None else None,
-                pbr=float(row["pbr"]) if row["pbr"] is not None else None,
-                roe=float(row["roe"]) if row["roe"] is not None else None,
-                debt_ratio=float(row["debt_ratio"]) if row["debt_ratio"] is not None else None,
-                eps=float(row["eps"]) if row["eps"] is not None else None,
-                bps=float(row["bps"]) if row["bps"] is not None else None,
+                revenue=_float(row["revenue"]),
+                operating_income=_float(row["operating_income"]),
+                net_income=_float(row["net_income"]),
+                per=_float(row["per"]),
+                pbr=_float(row["pbr"]),
+                roe=_float(row["roe"]),
+                debt_ratio=_float(row["debt_ratio"]),
+                eps=_float(row["eps"]),
+                bps=_float(row["bps"]),
                 fs_div=row["fs_div"],
+                operating_margin=_float(row["operating_margin"]),
+                net_margin=_float(row["net_margin"]),
+                roa=_float(row["roa"]),
+                ebitda=_float(row["ebitda"]),
+                current_ratio=_float(row["current_ratio"]),
+                quick_ratio=_float(row["quick_ratio"]),
+                interest_coverage=_float(row["interest_coverage"]),
+                capital_retention_ratio=_float(row["capital_retention_ratio"]),
+                ev_ebitda=_float(row["ev_ebitda"]),
+                dps=_float(row["dps"]),
+                dividend_yield=_float(row["dividend_yield"]),
+                revenue_growth=_float(row["revenue_growth"]),
+                operating_income_growth=_float(row["operating_income_growth"]),
+                net_income_growth=_float(row["net_income_growth"]),
             )
             for row in rows
         ]
@@ -277,3 +337,180 @@ class DatabaseManager:
             )
 
         return row["corp_code"] if row and row["corp_code"] else None
+
+    async def save_macro_indicators(self, snapshots: list[MacroSnapshot]) -> None:
+        """Save macro economic indicators to database using UPSERT.
+
+        Args:
+            snapshots: List of MacroSnapshot objects to save
+        """
+        if not self.pool:
+            raise RuntimeError("Database not connected")
+
+        async with self.pool.acquire() as conn:
+            await conn.executemany(
+                """
+                INSERT INTO macro_indicators
+                    (date, base_rate, usd_krw, cpi_yoy, kospi, kosdaq, export_yoy)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT (date) DO UPDATE
+                SET base_rate = EXCLUDED.base_rate,
+                    usd_krw = EXCLUDED.usd_krw,
+                    cpi_yoy = EXCLUDED.cpi_yoy,
+                    kospi = EXCLUDED.kospi,
+                    kosdaq = EXCLUDED.kosdaq,
+                    export_yoy = EXCLUDED.export_yoy
+                """,
+                [
+                    (
+                        s.date,
+                        s.base_rate,
+                        s.usd_krw,
+                        s.cpi_yoy,
+                        s.kospi,
+                        s.kosdaq,
+                        s.export_yoy,
+                    )
+                    for s in snapshots
+                ],
+            )
+        logger.info(f"Saved {len(snapshots)} macro indicator records to database")
+
+    async def get_macro_snapshot(self, target_date: date) -> MacroSnapshot | None:
+        """Get the most recent macro snapshot on or before target_date.
+
+        Args:
+            target_date: Reference date to look up
+
+        Returns:
+            Most recent MacroSnapshot or None if not found
+        """
+        if not self.pool:
+            raise RuntimeError("Database not connected")
+
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT date, base_rate, usd_krw, cpi_yoy, kospi, kosdaq, export_yoy
+                FROM macro_indicators
+                WHERE date <= $1
+                ORDER BY date DESC
+                LIMIT 1
+                """,
+                target_date,
+            )
+
+        if row is None:
+            return None
+
+        def _float(v: object) -> float | None:
+            if v is None:
+                return None
+            return float(v)  # type: ignore[arg-type]
+
+        return MacroSnapshot(
+            date=row["date"],
+            base_rate=_float(row["base_rate"]),
+            usd_krw=_float(row["usd_krw"]),
+            cpi_yoy=_float(row["cpi_yoy"]),
+            kospi=_float(row["kospi"]),
+            kosdaq=_float(row["kosdaq"]),
+            export_yoy=_float(row["export_yoy"]),
+        )
+
+    async def save_investor_trading(self, flows: list[InvestorFlow]) -> None:
+        """Save investor trading flow data to database using UPSERT.
+
+        Args:
+            flows: List of InvestorFlow objects to save
+        """
+        if not self.pool:
+            raise RuntimeError("Database not connected")
+
+        async with self.pool.acquire() as conn:
+            await conn.executemany(
+                """
+                INSERT INTO investor_trading
+                    (stock_code, date, foreign_net, institution_net, retail_net)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (stock_code, date) DO UPDATE
+                SET foreign_net = EXCLUDED.foreign_net,
+                    institution_net = EXCLUDED.institution_net,
+                    retail_net = EXCLUDED.retail_net
+                """,
+                [
+                    (
+                        f.stock_code,
+                        f.date,
+                        f.foreign_net,
+                        f.institution_net,
+                        f.retail_net,
+                    )
+                    for f in flows
+                ],
+            )
+        logger.info(f"Saved {len(flows)} investor trading records to database")
+
+    async def get_investor_trading(self, stock_code: str, limit: int = 20) -> list[InvestorFlow]:
+        """Get investor trading flow data for a stock.
+
+        Args:
+            stock_code: KRX stock code
+            limit: Maximum number of records to return
+
+        Returns:
+            List of InvestorFlow objects ordered by date descending
+        """
+        if not self.pool:
+            raise RuntimeError("Database not connected")
+
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT stock_code, date, foreign_net, institution_net, retail_net
+                FROM investor_trading
+                WHERE stock_code = $1
+                ORDER BY date DESC
+                LIMIT $2
+                """,
+                stock_code,
+                limit,
+            )
+
+        def _int(v: object) -> int | None:
+            if v is None:
+                return None
+            return int(v)  # type: ignore[arg-type, no-any-return, call-overload]
+
+        return [
+            InvestorFlow(
+                stock_code=row["stock_code"],
+                date=row["date"],
+                foreign_net=_int(row["foreign_net"]),
+                institution_net=_int(row["institution_net"]),
+                retail_net=_int(row["retail_net"]),
+            )
+            for row in rows
+        ]
+
+    async def save_market_indices(self, data: list[tuple[date, float, float]]) -> None:
+        """Save market index data (KOSPI/KOSDAQ) to database using UPSERT.
+
+        Args:
+            data: List of (date, kospi, kosdaq) tuples
+        """
+        if not self.pool:
+            raise RuntimeError("Database not connected")
+
+        async with self.pool.acquire() as conn:
+            await conn.executemany(
+                """
+                INSERT INTO market_indices (date, kospi, kosdaq)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (date) DO UPDATE
+                SET kospi = EXCLUDED.kospi,
+                    kosdaq = EXCLUDED.kosdaq
+                """,
+                data,
+            )
+        logger.info(f"Saved {len(data)} market index records to database")
