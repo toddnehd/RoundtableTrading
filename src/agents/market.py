@@ -99,6 +99,12 @@ class MarketSentimentAgent(BaseAgent):
 ## 메타데이터
 {self._format_metadata(data.metadata)}
 
+{self._format_macro(data)}
+
+{self._format_investor_flow(data)}
+
+{self._format_news(data)}
+
 위 분석 기준일을 기준으로 시장 환경과 섹터 동향을 평가하세요.
 시장 상황에 대한 가정을 명시하고, 해당 날짜 이후의 추가 정보는 없다고 가정하여 분석하세요.
 """
@@ -147,6 +153,44 @@ class MarketSentimentAgent(BaseAgent):
         if value is None:
             return "N/A"
         return f"{value / 1_000_000_000_000:.2f}조원"
+
+    def _format_macro(self, data: AnalysisData) -> str:
+        if data.macro is None:
+            return ""
+        m = data.macro
+        lines = ["## 거시경제"]
+        if m.base_rate is not None:
+            lines.append(f"- 기준금리: {m.base_rate:.2f}%")
+        if m.usd_krw is not None:
+            lines.append(f"- 원달러 환율: {m.usd_krw:,.0f}원")
+        if m.cpi_yoy is not None:
+            lines.append(f"- CPI 전년비: {m.cpi_yoy:+.1f}%")
+        if m.kospi is not None:
+            lines.append(f"- KOSPI: {m.kospi:,.2f}")
+        if m.kosdaq is not None:
+            lines.append(f"- KOSDAQ: {m.kosdaq:,.2f}")
+        return "\n".join(lines) if len(lines) > 1 else ""
+
+    def _format_investor_flow(self, data: AnalysisData) -> str:
+        if not data.investor_flow:
+            return ""
+        recent = data.investor_flow[-5:]
+        foreign_sum = sum(f.foreign_net for f in recent if f.foreign_net is not None)
+        institution_sum = sum(f.institution_net for f in recent if f.institution_net is not None)
+        lines = [
+            "## 투자자별 수급 (최근 5일 누적)",
+            f"- 외국인: {foreign_sum:+,}주",
+            f"- 기관: {institution_sum:+,}주",
+        ]
+        return "\n".join(lines)
+
+    def _format_news(self, data: AnalysisData) -> str:
+        if not data.news_headlines:
+            return ""
+        lines = [f"## 최근 뉴스 ({len(data.news_headlines)}건)"]
+        for n in data.news_headlines[:5]:
+            lines.append(f"- {n.title}")
+        return "\n".join(lines)
 
     def _format_metadata(self, metadata: dict[str, str]) -> str:
         if not metadata:

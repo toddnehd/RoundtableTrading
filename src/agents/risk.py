@@ -99,6 +99,12 @@ class RiskAssessmentAgent(BaseAgent):
 
 {self._format_financial_risks(data)}
 
+{self._format_investor_risks(data)}
+
+{self._format_disclosure_risks(data)}
+
+{self._format_macro_risks(data)}
+
 위 리스크 요소들을 분석하여 지정된 형식으로 의견을 제시하세요.
 """
         return prompt
@@ -186,6 +192,22 @@ class RiskAssessmentAgent(BaseAgent):
             else:
                 lines.append(f"- 부채비율: {latest.debt_ratio:.1f}% (안정)")
 
+        if latest.current_ratio is not None:
+            if latest.current_ratio < 100:
+                lines.append(f"- 유동비율: {latest.current_ratio:.1f}% (위험 — 단기 유동성 부족)")
+            elif latest.current_ratio < 150:
+                lines.append(f"- 유동비율: {latest.current_ratio:.1f}% (주의)")
+            else:
+                lines.append(f"- 유동비율: {latest.current_ratio:.1f}% (양호)")
+
+        if latest.interest_coverage is not None:
+            if latest.interest_coverage < 1:
+                lines.append(
+                    f"- 이자보상배율: {latest.interest_coverage:.1f}배 (위험 — 이자 미충당)"
+                )
+            elif latest.interest_coverage < 3:
+                lines.append(f"- 이자보상배율: {latest.interest_coverage:.1f}배 (주의)")
+
         if latest.roe is not None:
             if latest.roe < 0:
                 lines.append(f"- ROE: {latest.roe:.1f}% (적자)")
@@ -193,6 +215,47 @@ class RiskAssessmentAgent(BaseAgent):
                 lines.append(f"- ROE: {latest.roe:.1f}% (저조)")
 
         return "\n".join(lines) if len(lines) > 1 else ""
+
+    def _format_investor_risks(self, data: AnalysisData) -> str:
+        if not data.investor_flow:
+            return ""
+        recent = data.investor_flow[-5:]
+        foreign_sum = sum(f.foreign_net for f in recent if f.foreign_net is not None)
+        institution_sum = sum(f.institution_net for f in recent if f.institution_net is not None)
+        if foreign_sum >= 0 and institution_sum >= 0:
+            return ""
+        lines = ["### 수급 리스크 (최근 5일)"]
+        if foreign_sum < 0:
+            lines.append(f"- 외국인 순매도: {foreign_sum:,}주 (이탈 신호)")
+        if institution_sum < 0:
+            lines.append(f"- 기관 순매도: {institution_sum:,}주 (이탈 신호)")
+        return "\n".join(lines)
+
+    def _format_disclosure_risks(self, data: AnalysisData) -> str:
+        if not data.disclosures:
+            return ""
+        risky_keywords = ["유상증자", "전환사채", "소송", "영업손실", "감사의견", "최대주주 변경"]
+        risky = [d for d in data.disclosures if any(kw in d.report_nm for kw in risky_keywords)]
+        if not risky:
+            return ""
+        lines = ["### 공시 리스크"]
+        for d in risky[:3]:
+            lines.append(f"- {d.rcept_dt}: {d.report_nm}")
+        return "\n".join(lines)
+
+    def _format_macro_risks(self, data: AnalysisData) -> str:
+        if data.macro is None:
+            return ""
+        m = data.macro
+        risks = []
+        if m.base_rate is not None and m.base_rate > 3.5:
+            risks.append(f"고금리 환경 ({m.base_rate:.2f}%) — 밸류에이션 할인 압력")
+        if m.usd_krw is not None and m.usd_krw > 1400:
+            risks.append(f"원화 약세 ({m.usd_krw:,.0f}원) — 수입 비용 증가 리스크")
+        if not risks:
+            return ""
+        lines = ["### 거시경제 리스크"] + [f"- {r}" for r in risks]
+        return "\n".join(lines)
 
     def parse_response(self, content: str) -> AgentOpinion:
         opinion_match = re.search(r"의견:\s*(매수|중립|매도)", content)

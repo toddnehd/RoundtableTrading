@@ -25,35 +25,32 @@ class FundamentalAnalysisAgent(BaseAgent):
 ## 분석 지표
 
 ### 밸류에이션
-- PER (주가수익비율): 업종 평균 대비 고평가/저평가 판단
-  - 10 이하: 저평가 가능성
-  - 10~20: 적정
-  - 20 이상: 고평가 가능성 (단, 성장주는 예외)
-- PBR (주가순자산비율): 자산가치 대비 주가 수준
-  - 1 이하: 자산가치 대비 저평가
-  - 1~3: 적정
-  - 3 이상: 프리미엄 반영
+- PER: 10 이하 저평가 / 10~20 적정 / 20 이상 고평가 (성장주 예외)
+- PBR: 1 이하 자산가치 저평가 / 1~3 적정 / 3 이상 프리미엄
+- EV/EBITDA: 8 이하 저평가 / 8~15 적정 / 15 이상 고평가
 
 ### 수익성
-- ROE (자기자본이익률): 자본 효율성
-  - 15% 이상: 우수
-  - 10~15%: 양호
-  - 10% 미만: 개선 필요
+- ROE: 15% 이상 우수 / 10~15% 양호 / 10% 미만 개선 필요
+- 영업이익률: 10% 이상 양호 / 5~10% 보통 / 5% 미만 주의
+- 순이익률: 5% 이상 양호
+- ROA: 5% 이상 양호
 
 ### 재무 안정성
-- 부채비율: 재무 리스크
-  - 100% 이하: 안정적
-  - 100~200%: 보통
-  - 200% 이상: 주의 필요
+- 부채비율: 100% 이하 안정 / 100~200% 보통 / 200% 이상 주의
+- 유동비율: 150% 이상 양호 / 100~150% 보통 / 100% 미만 주의
+- 이자보상배율: 3 이상 안정 / 1~3 주의 / 1 미만 위험
 
 ### 성장성
-- 매출/영업이익 증가율: 분기별 성장 추세
-- 실적 서프라이즈: 시장 기대치 대비 실적
+- 매출/영업이익/순이익 성장률 추세
+- EBITDA 절대 규모와 추세
+
+### 배당
+- DPS, 배당수익률
 
 ## 분석 원칙
 1. 단일 지표가 아닌 종합적 재무 분석
-2. 업종 특성을 고려한 상대 비교
-3. 분기별 추세 변화 확인
+2. 업종 비교 데이터가 있으면 반드시 상대 평가 수행
+3. 공시·거시 맥락을 재무 해석에 반영
 
 ## 신뢰도 점수 기준
 - 80~100: 밸류에이션+수익성+안정성 모두 양호
@@ -63,11 +60,17 @@ class FundamentalAnalysisAgent(BaseAgent):
 - 0~19: 전반적 재무 위험
 
 ## 출력 형식 (정확히 준수)
+Step 1 밸류에이션: [PER/PBR/EV·EBITDA 해석 1줄]
+Step 2 수익성: [ROE/영업이익률/ROA 해석 1줄]
+Step 3 안정성: [부채비율/유동비율/이자보상배율 해석 1줄]
+Step 4 성장성: [매출·이익 성장률 추세 1줄]
+Step 5 업종비교: [동종업 대비 위치 1줄, 데이터 없으면 '업종비교 데이터 없음']
+Step 6 맥락: [공시·거시경제 영향 1줄, 데이터 없으면 '추가 맥락 없음']
 의견: [매수/중립/매도]
 신뢰도: [0-100]
-근거1: [지표명과 해석]
-근거2: [지표명과 해석]
-근거3: [지표명과 해석]
+근거1: [가장 중요한 판단 근거]
+근거2: [두 번째 판단 근거]
+근거3: [세 번째 판단 근거]
 """
 
     def __init__(self, llm_client: LLMClient) -> None:
@@ -97,19 +100,37 @@ class FundamentalAnalysisAgent(BaseAgent):
 ### 밸류에이션
 - PER: {self._format_value(latest.per)}
 - PBR: {self._format_value(latest.pbr)}
+- EV/EBITDA: {self._format_value(latest.ev_ebitda)}
 
 ### 수익성
 - ROE: {self._format_pct(latest.roe)}
+- 영업이익률: {self._format_pct(latest.operating_margin)}
+- 순이익률: {self._format_pct(latest.net_margin)}
+- ROA: {self._format_pct(latest.roa)}
 - 매출액: {self._format_billions(latest.revenue)}
 - 영업이익: {self._format_billions(latest.operating_income)}
-- 순이익: {self._format_billions(latest.net_income)}
+- EBITDA: {self._format_billions(latest.ebitda)}
 
 ### 재무 안정성
 - 부채비율: {self._format_pct(latest.debt_ratio)}
+- 유동비율: {self._format_pct(latest.current_ratio)}
+- 이자보상배율: {self._format_value(latest.interest_coverage)}
+
+### 배당
+- DPS: {self._format_value(latest.dps)}원
+- 배당수익률: {self._format_pct(latest.dividend_yield)}
+
+{self._format_growth_rates(latest)}
 
 {self._format_quarter_comparison(latest, prev)}
 
-위 데이터를 종합 분석하여 지정된 형식으로 의견을 제시하세요.
+{self._format_sector_comparison(data)}
+
+{self._format_macro_context(data)}
+
+{self._format_disclosures(data)}
+
+위 데이터를 Step 1~6 순서로 분석한 뒤 지정된 형식으로 의견을 제시하세요.
 """
         return prompt
 
@@ -147,6 +168,71 @@ class FundamentalAnalysisAgent(BaseAgent):
         if value is None:
             return "N/A"
         return f"{value / 1_000_000_000:.1f}억원"
+
+    def _format_growth_rates(self, latest) -> str:
+        lines = []
+        if latest.revenue_growth is not None:
+            lines.append(f"- 매출 성장률: {latest.revenue_growth:+.1f}%")
+        if latest.operating_income_growth is not None:
+            lines.append(f"- 영업이익 성장률: {latest.operating_income_growth:+.1f}%")
+        if latest.net_income_growth is not None:
+            lines.append(f"- 순이익 성장률: {latest.net_income_growth:+.1f}%")
+        if not lines:
+            return ""
+        return "### 성장률 (전년동기 대비)\n" + "\n".join(lines)
+
+    def _safe_float(self, value: str | None) -> float | None:
+        if value is None or value in ("None", "N/A", ""):
+            return None
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return None
+
+    def _format_sector_comparison(self, data: AnalysisData) -> str:
+        sc = {k: v for k, v in data.metadata.items() if k.startswith("sector_")}
+        if not sc:
+            return ""
+        lines = ["## 업종비교"]
+        per_avg = self._safe_float(sc.get("sector_per_avg"))
+        if per_avg is not None:
+            lines.append(f"- 업종 평균 PER: {per_avg:.1f}")
+        pbr_avg = self._safe_float(sc.get("sector_pbr_avg"))
+        if pbr_avg is not None:
+            lines.append(f"- 업종 평균 PBR: {pbr_avg:.2f}")
+        roe_avg = self._safe_float(sc.get("sector_roe_avg"))
+        if roe_avg is not None:
+            lines.append(f"- 업종 평균 ROE: {roe_avg:.1f}%")
+        op_avg = self._safe_float(sc.get("sector_op_margin_avg"))
+        if op_avg is not None:
+            lines.append(f"- 업종 평균 영업이익률: {op_avg:.1f}%")
+        peer = self._safe_float(sc.get("peer_count"))
+        if peer is not None:
+            lines.append(f"- 비교 대상 기업 수: {int(peer)}개")
+        return "\n".join(lines) if len(lines) > 1 else ""
+
+    def _format_macro_context(self, data: AnalysisData) -> str:
+        if data.macro is None:
+            return ""
+        m = data.macro
+        parts = []
+        if m.base_rate is not None:
+            parts.append(f"기준금리 {m.base_rate:.2f}%")
+        if m.usd_krw is not None:
+            parts.append(f"원달러 {m.usd_krw:,.0f}원")
+        if m.cpi_yoy is not None:
+            parts.append(f"CPI 전년비 {m.cpi_yoy:+.1f}%")
+        if not parts:
+            return ""
+        return f"## 거시경제 맥락\n- {', '.join(parts)}"
+
+    def _format_disclosures(self, data: AnalysisData) -> str:
+        if not data.disclosures:
+            return ""
+        lines = ["## 최근 공시 (30일)"]
+        for d in data.disclosures[:3]:
+            lines.append(f"- {d.rcept_dt}: {d.report_nm}")
+        return "\n".join(lines)
 
     def _format_quarter_comparison(self, latest, prev) -> str:
         if prev is None:
