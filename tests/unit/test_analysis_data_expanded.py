@@ -119,14 +119,12 @@ class TestAnalysisDataAllEnrichedFields:
 
     def test_analysis_data_enriched_fields_independent_of_existing_fields(self):
         """Enriched fields should coexist with original prices/financials fields."""
-        from datetime import date as d
-
         from src.data.models import DailyPrice
 
         prices = [
             DailyPrice(
                 stock_code="005930",
-                date=d(2026, 3, 7),
+                date=date(2026, 3, 7),
                 open_price=70000,
                 high_price=72000,
                 low_price=69500,
