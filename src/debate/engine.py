@@ -5,6 +5,7 @@ import dataclasses
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from enum import Enum
+from typing import cast
 
 import asyncpg
 import httpx
@@ -145,10 +146,20 @@ class DebateEngine:
             self._fetch_disclosures(data),
             return_exceptions=True,
         )
-        macro = results[0] if not isinstance(results[0], Exception) else None
-        investor_flow = results[1] if not isinstance(results[1], Exception) else []
-        news = results[2] if not isinstance(results[2], Exception) else []
-        disclosures = results[3] if not isinstance(results[3], Exception) else []
+        macro = (
+            cast(MacroSnapshot | None, results[0])
+            if not isinstance(results[0], BaseException)
+            else None
+        )
+        investor_flow = (
+            cast(list[InvestorFlow], results[1])
+            if not isinstance(results[1], BaseException)
+            else []
+        )
+        news = cast(list[NewsItem], results[2]) if not isinstance(results[2], BaseException) else []
+        disclosures = (
+            cast(list[Disclosure], results[3]) if not isinstance(results[3], BaseException) else []
+        )
         return dataclasses.replace(
             data,
             macro=macro,
