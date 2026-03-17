@@ -14,7 +14,11 @@ class FinancialRepository:
             rows = await conn.fetch(
                 """
                 SELECT stock_code, quarter, revenue, operating_income, net_income,
-                       per, pbr, roe, debt_ratio, eps, bps, fs_div
+                       per, pbr, roe, debt_ratio, eps, bps, fs_div,
+                       operating_margin, net_margin, roa, ebitda,
+                       current_ratio, quick_ratio, interest_coverage, capital_retention_ratio,
+                       ev_ebitda, dps, dividend_yield,
+                       revenue_growth, operating_income_growth, net_income_growth
                 FROM financial_data
                 WHERE stock_code = $1
                 ORDER BY quarter DESC
@@ -45,4 +49,18 @@ def _row_to_financial(row: asyncpg.Record) -> FinancialData:
         eps=_float(row["eps"]),
         bps=_float(row["bps"]),
         fs_div=row["fs_div"],
+        operating_margin=_float(row["operating_margin"]),
+        net_margin=_float(row["net_margin"]),
+        roa=_float(row["roa"]),
+        ebitda=_float(row["ebitda"]),
+        current_ratio=_float(row["current_ratio"]),
+        quick_ratio=_float(row["quick_ratio"]),
+        interest_coverage=_float(row["interest_coverage"]),
+        capital_retention_ratio=_float(row["capital_retention_ratio"]),
+        ev_ebitda=_float(row["ev_ebitda"]),
+        dps=_float(row["dps"]),
+        dividend_yield=_float(row["dividend_yield"]),
+        revenue_growth=_float(row["revenue_growth"]),
+        operating_income_growth=_float(row["operating_income_growth"]),
+        net_income_growth=_float(row["net_income_growth"]),
     )

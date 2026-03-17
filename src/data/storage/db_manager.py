@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncpg
 from loguru import logger
 
@@ -158,8 +160,15 @@ class DatabaseManager:
                 """
                 INSERT INTO financial_data
                     (stock_code, quarter, revenue, operating_income, net_income,
-                     per, pbr, roe, debt_ratio, eps, bps, fs_div, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+                     per, pbr, roe, debt_ratio, eps, bps, fs_div,
+                     operating_margin, net_margin, roa, ebitda,
+                     current_ratio, quick_ratio, interest_coverage, capital_retention_ratio,
+                     ev_ebitda, dps, dividend_yield,
+                     revenue_growth, operating_income_growth, net_income_growth,
+                     updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+                        $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23,
+                        $24, $25, $26, NOW())
                 ON CONFLICT (stock_code, quarter) DO UPDATE
                 SET revenue = EXCLUDED.revenue,
                     operating_income = EXCLUDED.operating_income,
@@ -171,6 +180,20 @@ class DatabaseManager:
                     eps = EXCLUDED.eps,
                     bps = EXCLUDED.bps,
                     fs_div = EXCLUDED.fs_div,
+                    operating_margin = EXCLUDED.operating_margin,
+                    net_margin = EXCLUDED.net_margin,
+                    roa = EXCLUDED.roa,
+                    ebitda = EXCLUDED.ebitda,
+                    current_ratio = EXCLUDED.current_ratio,
+                    quick_ratio = EXCLUDED.quick_ratio,
+                    interest_coverage = EXCLUDED.interest_coverage,
+                    capital_retention_ratio = EXCLUDED.capital_retention_ratio,
+                    ev_ebitda = EXCLUDED.ev_ebitda,
+                    dps = EXCLUDED.dps,
+                    dividend_yield = EXCLUDED.dividend_yield,
+                    revenue_growth = EXCLUDED.revenue_growth,
+                    operating_income_growth = EXCLUDED.operating_income_growth,
+                    net_income_growth = EXCLUDED.net_income_growth,
                     updated_at = NOW()
                 """,
                 [
@@ -187,6 +210,20 @@ class DatabaseManager:
                         f.eps,
                         f.bps,
                         f.fs_div,
+                        f.operating_margin,
+                        f.net_margin,
+                        f.roa,
+                        f.ebitda,
+                        f.current_ratio,
+                        f.quick_ratio,
+                        f.interest_coverage,
+                        f.capital_retention_ratio,
+                        f.ev_ebitda,
+                        f.dps,
+                        f.dividend_yield,
+                        f.revenue_growth,
+                        f.operating_income_growth,
+                        f.net_income_growth,
                     )
                     for f in financials
                 ],
@@ -210,7 +247,11 @@ class DatabaseManager:
             rows = await conn.fetch(
                 """
                 SELECT stock_code, quarter, revenue, operating_income, net_income,
-                       per, pbr, roe, debt_ratio, eps, bps, fs_div
+                       per, pbr, roe, debt_ratio, eps, bps, fs_div,
+                       operating_margin, net_margin, roa, ebitda,
+                       current_ratio, quick_ratio, interest_coverage, capital_retention_ratio,
+                       ev_ebitda, dps, dividend_yield,
+                       revenue_growth, operating_income_growth, net_income_growth
                 FROM financial_data
                 WHERE stock_code = $1
                 ORDER BY quarter DESC
@@ -220,22 +261,39 @@ class DatabaseManager:
                 limit,
             )
 
+        def _float(v: object) -> float | None:
+            if v is None:
+                return None
+            return float(v)  # type: ignore[arg-type]
+
         return [
             FinancialData(
                 stock_code=row["stock_code"],
                 quarter=row["quarter"],
-                revenue=float(row["revenue"]) if row["revenue"] is not None else None,
-                operating_income=float(row["operating_income"])
-                if row["operating_income"] is not None
-                else None,
-                net_income=float(row["net_income"]) if row["net_income"] is not None else None,
-                per=float(row["per"]) if row["per"] is not None else None,
-                pbr=float(row["pbr"]) if row["pbr"] is not None else None,
-                roe=float(row["roe"]) if row["roe"] is not None else None,
-                debt_ratio=float(row["debt_ratio"]) if row["debt_ratio"] is not None else None,
-                eps=float(row["eps"]) if row["eps"] is not None else None,
-                bps=float(row["bps"]) if row["bps"] is not None else None,
+                revenue=_float(row["revenue"]),
+                operating_income=_float(row["operating_income"]),
+                net_income=_float(row["net_income"]),
+                per=_float(row["per"]),
+                pbr=_float(row["pbr"]),
+                roe=_float(row["roe"]),
+                debt_ratio=_float(row["debt_ratio"]),
+                eps=_float(row["eps"]),
+                bps=_float(row["bps"]),
                 fs_div=row["fs_div"],
+                operating_margin=_float(row["operating_margin"]),
+                net_margin=_float(row["net_margin"]),
+                roa=_float(row["roa"]),
+                ebitda=_float(row["ebitda"]),
+                current_ratio=_float(row["current_ratio"]),
+                quick_ratio=_float(row["quick_ratio"]),
+                interest_coverage=_float(row["interest_coverage"]),
+                capital_retention_ratio=_float(row["capital_retention_ratio"]),
+                ev_ebitda=_float(row["ev_ebitda"]),
+                dps=_float(row["dps"]),
+                dividend_yield=_float(row["dividend_yield"]),
+                revenue_growth=_float(row["revenue_growth"]),
+                operating_income_growth=_float(row["operating_income_growth"]),
+                net_income_growth=_float(row["net_income_growth"]),
             )
             for row in rows
         ]
