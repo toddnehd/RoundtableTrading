@@ -3,6 +3,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.data.freshness import calc_collection_range, get_collectible_end_date
 from src.data.storage.financial_repository import FinancialRepository
+from src.data.storage.investor_flow_repository import InvestorFlowRepository
+from src.data.storage.macro_repository import MacroRepository
 from src.data.storage.price_repository import PriceRepository
 from src.data.storage.stock_repository import StockRepository
 
@@ -358,24 +360,42 @@ class TestFinancialRepository:
         pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
         return pool, conn
 
+    def _make_financial_row(self, stock_code: str, quarter: str, **overrides) -> FakeRecord:
+        """FakeRecord 생성 헬퍼 — 기본값 포함 전체 26개 필드."""
+        defaults = {
+            "stock_code": stock_code,
+            "quarter": quarter,
+            "revenue": 1000000.0,
+            "operating_income": 200000.0,
+            "net_income": 150000.0,
+            "per": 10.5,
+            "pbr": 1.2,
+            "roe": 15.0,
+            "debt_ratio": 30.0,
+            "eps": 1000.0,
+            "bps": 8000.0,
+            "fs_div": "CFS",
+            "operating_margin": 20.0,
+            "net_margin": 15.0,
+            "roa": 8.0,
+            "ebitda": 250000.0,
+            "current_ratio": 150.0,
+            "quick_ratio": 120.0,
+            "interest_coverage": 10.0,
+            "capital_retention_ratio": 60.0,
+            "ev_ebitda": 8.5,
+            "dps": 500.0,
+            "dividend_yield": 2.0,
+            "revenue_growth": 5.0,
+            "operating_income_growth": 7.0,
+            "net_income_growth": 6.0,
+        }
+        defaults.update(overrides)
+        return FakeRecord(defaults)
+
     async def test_get_recent_returns_financials(self):
         """get_recent should return list of FinancialData objects."""
-        row = FakeRecord(
-            {
-                "stock_code": "005930",
-                "quarter": "2025Q3",
-                "revenue": 1000000.0,
-                "operating_income": 200000.0,
-                "net_income": 150000.0,
-                "per": 10.5,
-                "pbr": 1.2,
-                "roe": 15.0,
-                "debt_ratio": 30.0,
-                "eps": 1000.0,
-                "bps": 8000.0,
-                "fs_div": "CFS",
-            }
-        )
+        row = self._make_financial_row("005930", "2025Q3")
         pool, conn = self.make_mock_pool(fetch_return=[row])
 
         repo = FinancialRepository(pool)
@@ -386,25 +406,42 @@ class TestFinancialRepository:
         assert result[0].quarter == "2025Q3"
         assert result[0].revenue == 1000000.0
         assert result[0].per == 10.5
+        assert result[0].operating_margin == 20.0
+        assert result[0].ebitda == 250000.0
+        assert result[0].dividend_yield == 2.0
 
     async def test_get_recent_with_none_values(self):
-        """get_recent should handle None financial values."""
-        row = FakeRecord(
-            {
-                "stock_code": "005930",
-                "quarter": "2025Q3",
-                "revenue": None,
-                "operating_income": None,
-                "net_income": None,
-                "per": None,
-                "pbr": None,
-                "roe": None,
-                "debt_ratio": None,
-                "eps": None,
-                "bps": None,
-                "fs_div": None,
-            }
-        )
+        """get_recent should handle None financial values (all 26 fields)."""
+        none_fields = {
+            k: None
+            for k in [
+                "revenue",
+                "operating_income",
+                "net_income",
+                "per",
+                "pbr",
+                "roe",
+                "debt_ratio",
+                "eps",
+                "bps",
+                "fs_div",
+                "operating_margin",
+                "net_margin",
+                "roa",
+                "ebitda",
+                "current_ratio",
+                "quick_ratio",
+                "interest_coverage",
+                "capital_retention_ratio",
+                "ev_ebitda",
+                "dps",
+                "dividend_yield",
+                "revenue_growth",
+                "operating_income_growth",
+                "net_income_growth",
+            ]
+        }
+        row = self._make_financial_row("005930", "2025Q3", **none_fields)
         pool, conn = self.make_mock_pool(fetch_return=[row])
 
         repo = FinancialRepository(pool)
@@ -414,6 +451,8 @@ class TestFinancialRepository:
         assert result[0].revenue is None
         assert result[0].per is None
         assert result[0].fs_div is None
+        assert result[0].operating_margin is None
+        assert result[0].ebitda is None
 
     async def test_get_recent_returns_empty_list(self):
         """get_recent should return empty list when no data."""
@@ -426,38 +465,8 @@ class TestFinancialRepository:
 
     async def test_get_recent_multiple_quarters(self):
         """get_recent should return multiple quarters in order."""
-        row1 = FakeRecord(
-            {
-                "stock_code": "005930",
-                "quarter": "2025Q3",
-                "revenue": 1000000.0,
-                "operating_income": 200000.0,
-                "net_income": 150000.0,
-                "per": 10.5,
-                "pbr": 1.2,
-                "roe": 15.0,
-                "debt_ratio": 30.0,
-                "eps": 1000.0,
-                "bps": 8000.0,
-                "fs_div": "CFS",
-            }
-        )
-        row2 = FakeRecord(
-            {
-                "stock_code": "005930",
-                "quarter": "2025Q2",
-                "revenue": 950000.0,
-                "operating_income": 190000.0,
-                "net_income": 140000.0,
-                "per": 10.8,
-                "pbr": 1.25,
-                "roe": 14.5,
-                "debt_ratio": 32.0,
-                "eps": 950.0,
-                "bps": 7800.0,
-                "fs_div": "CFS",
-            }
-        )
+        row1 = self._make_financial_row("005930", "2025Q3", revenue=1000000.0)
+        row2 = self._make_financial_row("005930", "2025Q2", revenue=950000.0)
         pool, conn = self.make_mock_pool(fetch_return=[row1, row2])
 
         repo = FinancialRepository(pool)
@@ -466,3 +475,206 @@ class TestFinancialRepository:
         assert len(result) == 2
         assert result[0].quarter == "2025Q3"
         assert result[1].quarter == "2025Q2"
+
+
+# ============================================================================
+# Tests for MacroRepository
+# ============================================================================
+
+
+class TestMacroRepository:
+    """Tests for MacroRepository class."""
+
+    def make_mock_pool(self, fetchrow_return=None, fetch_return=None):
+        conn = AsyncMock()
+        conn.fetchrow = AsyncMock(return_value=fetchrow_return)
+        conn.fetch = AsyncMock(return_value=fetch_return or [])
+        conn.executemany = AsyncMock(return_value=None)
+
+        pool = MagicMock()
+        pool.acquire = MagicMock()
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+        return pool, conn
+
+    async def test_get_latest_returns_macro_snapshot(self):
+        """get_latest should return MacroSnapshot when row exists."""
+        row = FakeRecord(
+            {
+                "date": date(2026, 3, 1),
+                "base_rate": 3.5,
+                "usd_krw": 1350.0,
+                "cpi_yoy": 2.1,
+                "kospi": 2700.0,
+                "kosdaq": 900.0,
+                "export_yoy": 5.0,
+            }
+        )
+        pool, conn = self.make_mock_pool(fetchrow_return=row)
+
+        repo = MacroRepository(pool)
+        result = await repo.get_latest(date(2026, 3, 7))
+
+        assert result is not None
+        assert result.date == date(2026, 3, 1)
+        assert result.base_rate == 3.5
+        assert result.usd_krw == 1350.0
+        assert result.kospi == 2700.0
+
+    async def test_get_latest_returns_none_when_no_data(self):
+        """get_latest should return None when no row found."""
+        pool, conn = self.make_mock_pool(fetchrow_return=None)
+
+        repo = MacroRepository(pool)
+        result = await repo.get_latest(date(2026, 3, 7))
+
+        assert result is None
+
+    async def test_get_latest_handles_none_fields(self):
+        """get_latest should handle None numeric fields."""
+        row = FakeRecord(
+            {
+                "date": date(2026, 3, 1),
+                "base_rate": None,
+                "usd_krw": None,
+                "cpi_yoy": None,
+                "kospi": None,
+                "kosdaq": None,
+                "export_yoy": None,
+            }
+        )
+        pool, conn = self.make_mock_pool(fetchrow_return=row)
+
+        repo = MacroRepository(pool)
+        result = await repo.get_latest(date(2026, 3, 7))
+
+        assert result is not None
+        assert result.base_rate is None
+        assert result.kospi is None
+
+    async def test_save_calls_executemany(self):
+        """save should call executemany with correct data."""
+        from src.data.models import MacroSnapshot
+
+        pool, conn = self.make_mock_pool()
+        snapshots = [
+            MacroSnapshot(
+                date=date(2026, 3, 1),
+                base_rate=3.5,
+                usd_krw=1350.0,
+                cpi_yoy=2.1,
+                kospi=2700.0,
+                kosdaq=900.0,
+                export_yoy=5.0,
+            )
+        ]
+
+        repo = MacroRepository(pool)
+        await repo.save(snapshots)
+
+        conn.executemany.assert_called_once()
+
+    async def test_save_market_indices_calls_executemany(self):
+        """save_market_indices should call executemany with (date, kospi, kosdaq) tuples."""
+        pool, conn = self.make_mock_pool()
+        data = [
+            (date(2026, 3, 5), 2700.0, 900.0),
+            (date(2026, 3, 6), 2710.0, 905.0),
+        ]
+
+        repo = MacroRepository(pool)
+        await repo.save_market_indices(data)
+
+        conn.executemany.assert_called_once()
+        call_args = conn.executemany.call_args[0]
+        assert call_args[1] == data
+
+
+# ============================================================================
+# Tests for InvestorFlowRepository
+# ============================================================================
+
+
+class TestInvestorFlowRepository:
+    """Tests for InvestorFlowRepository class."""
+
+    def make_mock_pool(self, fetch_return=None):
+        conn = AsyncMock()
+        conn.fetch = AsyncMock(return_value=fetch_return or [])
+        conn.executemany = AsyncMock(return_value=None)
+
+        pool = MagicMock()
+        pool.acquire = MagicMock()
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+        return pool, conn
+
+    async def test_get_recent_returns_investor_flows(self):
+        """get_recent should return list of InvestorFlow objects."""
+        row = FakeRecord(
+            {
+                "stock_code": "005930",
+                "date": date(2026, 3, 7),
+                "foreign_net": 1000000,
+                "institution_net": -500000,
+                "retail_net": -500000,
+            }
+        )
+        pool, conn = self.make_mock_pool(fetch_return=[row])
+
+        repo = InvestorFlowRepository(pool)
+        result = await repo.get_recent("005930", limit=20)
+
+        assert len(result) == 1
+        assert result[0].stock_code == "005930"
+        assert result[0].foreign_net == 1000000
+        assert result[0].institution_net == -500000
+
+    async def test_get_recent_handles_none_values(self):
+        """get_recent should handle None net values."""
+        row = FakeRecord(
+            {
+                "stock_code": "005930",
+                "date": date(2026, 3, 7),
+                "foreign_net": None,
+                "institution_net": None,
+                "retail_net": None,
+            }
+        )
+        pool, conn = self.make_mock_pool(fetch_return=[row])
+
+        repo = InvestorFlowRepository(pool)
+        result = await repo.get_recent("005930", limit=20)
+
+        assert len(result) == 1
+        assert result[0].foreign_net is None
+        assert result[0].retail_net is None
+
+    async def test_get_recent_returns_empty_list(self):
+        """get_recent should return empty list when no data."""
+        pool, conn = self.make_mock_pool(fetch_return=[])
+
+        repo = InvestorFlowRepository(pool)
+        result = await repo.get_recent("999999")
+
+        assert result == []
+
+    async def test_save_calls_executemany(self):
+        """save should call executemany with correct flow data."""
+        from src.data.models import InvestorFlow
+
+        pool, conn = self.make_mock_pool()
+        flows = [
+            InvestorFlow(
+                stock_code="005930",
+                date=date(2026, 3, 7),
+                foreign_net=1000000,
+                institution_net=-500000,
+                retail_net=-500000,
+            )
+        ]
+
+        repo = InvestorFlowRepository(pool)
+        await repo.save(flows)
+
+        conn.executemany.assert_called_once()
