@@ -171,8 +171,9 @@ class DebateEngine:
     async def _fetch_macro(self, data: AnalysisData) -> MacroSnapshot | None:
         if self._macro_repo is None:
             return None
+        ref_date = data.analysis_date or date.today()
         try:
-            return await self._macro_repo.get_latest(date.today())
+            return await self._macro_repo.get_latest(ref_date)
         except Exception as e:
             logger.warning(f"거시경제 데이터 조회 실패: {e}")
             return None
@@ -198,16 +199,33 @@ class DebateEngine:
     async def _fetch_disclosures(self, data: AnalysisData) -> list[Disclosure]:
         if not settings.dart_api_key:
             return []
-        today = date.today()
-        bgn_de = (today - timedelta(days=30)).strftime("%Y%m%d")
-        end_de = today.strftime("%Y%m%d")
+
+        # DART list API requires corp_code (8-digit unique ID), not stock_code (6-digit KRX)
+        corp_code: str | None = None
+        if self._pool:
+            try:
+                async with self._pool.acquire() as conn:
+                    row = await conn.fetchrow(
+                        "SELECT corp_code FROM stocks WHERE stock_code = $1",
+                        data.stock_code,
+                    )
+                corp_code = row["corp_code"] if row and row["corp_code"] else None
+            except Exception as e:
+                logger.warning(f"corp_code 조회 실패 [{data.stock_code}]: {e}")
+
+        if not corp_code:
+            return []
+
+        ref_date = data.analysis_date or date.today()
+        bgn_de = (ref_date - timedelta(days=30)).strftime("%Y%m%d")
+        end_de = ref_date.strftime("%Y%m%d")
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(
                     "https://opendart.fss.or.kr/api/list.json",
                     params={
                         "crtfc_key": settings.dart_api_key,
-                        "stock_code": data.stock_code,
+                        "corp_code": corp_code,
                         "bgn_de": bgn_de,
                         "end_de": end_de,
                         "page_count": "10",
