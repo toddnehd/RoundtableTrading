@@ -211,6 +211,33 @@ class TestPriceRepository:
         assert result[0].date == date(2026, 3, 5)
         assert result[1].date == date(2026, 3, 6)
 
+    async def test_save_delegates_to_internal_save(self):
+        """save should persist prices via executemany."""
+        conn = AsyncMock()
+        conn.executemany = AsyncMock(return_value=None)
+        pool = MagicMock()
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        from src.data.models import DailyPrice
+
+        prices = [
+            DailyPrice(
+                stock_code="005930",
+                date=date(2026, 3, 7),
+                open_price=70000,
+                high_price=71000,
+                low_price=69000,
+                close_price=70500,
+                volume=1000000,
+            )
+        ]
+
+        repo = PriceRepository(pool)
+        await repo.save(prices)
+
+        conn.executemany.assert_called_once()
+
     async def test_get_bulk_returns_dict_by_stock_code(self):
         """get_bulk should return dict grouped by stock_code."""
         row1 = FakeRecord(
@@ -339,6 +366,63 @@ class TestStockRepository:
         assert result is not None
         assert result.sector is None
         assert result.industry is None
+
+    def make_mock_pool_with_execute(self):
+        conn = AsyncMock()
+        conn.execute = AsyncMock(return_value=None)
+        conn.fetchrow = AsyncMock(return_value=None)
+
+        pool = MagicMock()
+        pool.acquire = MagicMock()
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+        return pool, conn
+
+    async def test_save_calls_execute_for_each_stock(self):
+        """save should call execute once per stock."""
+        from src.data.models import Stock
+
+        pool, conn = self.make_mock_pool_with_execute()
+        stocks = [
+            Stock(stock_code="005930", stock_name="삼성전자", market="KOSPI"),
+            Stock(stock_code="000660", stock_name="SK하이닉스", market="KOSPI"),
+        ]
+
+        repo = StockRepository(pool)
+        await repo.save(stocks)
+
+        assert conn.execute.call_count == 2
+
+    async def test_save_corp_code_calls_execute(self):
+        """save_corp_code should call execute with correct params."""
+        pool, conn = self.make_mock_pool_with_execute()
+
+        repo = StockRepository(pool)
+        await repo.save_corp_code("005930", "00126380")
+
+        conn.execute.assert_called_once()
+        args = conn.execute.call_args[0]
+        assert "00126380" in args
+        assert "005930" in args
+
+    async def test_get_corp_code_returns_code(self):
+        """get_corp_code should return corp_code string."""
+        row = FakeRecord({"corp_code": "00126380"})
+        pool, conn = self.make_mock_pool(fetchrow_return=row)
+
+        repo = StockRepository(pool)
+        result = await repo.get_corp_code("005930")
+
+        assert result == "00126380"
+
+    async def test_get_corp_code_returns_none_when_not_found(self):
+        """get_corp_code should return None when stock not found."""
+        pool, conn = self.make_mock_pool(fetchrow_return=None)
+
+        repo = StockRepository(pool)
+        result = await repo.get_corp_code("999999")
+
+        assert result is None
 
 
 # ============================================================================
@@ -475,6 +559,25 @@ class TestFinancialRepository:
         assert len(result) == 2
         assert result[0].quarter == "2025Q3"
         assert result[1].quarter == "2025Q2"
+
+    async def test_save_calls_executemany(self):
+        """save should persist financial records via executemany."""
+        from src.data.models import FinancialData
+
+        conn = AsyncMock()
+        conn.executemany = AsyncMock(return_value=None)
+        pool = MagicMock()
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        financials = [
+            FinancialData(stock_code="005930", quarter="2025Q3", revenue=1000000.0, roe=15.0)
+        ]
+
+        repo = FinancialRepository(pool)
+        await repo.save(financials)
+
+        conn.executemany.assert_called_once()
 
 
 # ============================================================================

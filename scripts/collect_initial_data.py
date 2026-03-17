@@ -16,7 +16,8 @@ async def collect_initial_data():
 
     try:
         await db.connect()
-        assert db.pool is not None
+        if db.pool is None:
+            raise RuntimeError("Database not connected")
         stock_repo = StockRepository(db.pool)
         price_repo = PriceRepository(db.pool)
 
