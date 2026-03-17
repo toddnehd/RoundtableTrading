@@ -61,6 +61,7 @@ class TechnicalAnalysisAgent(BaseAgent):
 1. 단일 지표가 아닌 3개 이상 지표의 종합 판단
 2. 추세 방향과 모멘텀의 일치 여부 확인
 3. 거래량으로 추세의 신뢰도 검증
+4. 외국인·기관 수급이 있으면 기술적 신호와 합산 판단
 
 ## 신뢰도 점수 기준
 - 80~100: 3개 이상 지표가 같은 방향, 거래량 뒷받침
@@ -116,6 +117,8 @@ class TechnicalAnalysisAgent(BaseAgent):
 ## 최근 5일 가격
 {recent_prices}
 
+{self._format_investor_flow(data)}
+
 위 데이터를 종합 분석하여 지정된 형식으로 의견을 제시하세요.
 """
         return prompt
@@ -135,6 +138,19 @@ class TechnicalAnalysisAgent(BaseAgent):
             return "역배열 (하락 추세)"
         else:
             return "혼조 (추세 전환 가능)"
+
+    def _format_investor_flow(self, data: AnalysisData) -> str:
+        if not data.investor_flow:
+            return ""
+        recent = data.investor_flow[-5:]
+        lines = ["## 투자자별 수급 (최근 5일)"]
+        lines.append("일자         외국인(주)   기관(주)    개인(주)")
+        for f in recent:
+            foreign = f"{f.foreign_net:+,}" if f.foreign_net is not None else "N/A"
+            institution = f"{f.institution_net:+,}" if f.institution_net is not None else "N/A"
+            retail = f"{f.retail_net:+,}" if f.retail_net is not None else "N/A"
+            lines.append(f"{f.date}  {foreign:>12}  {institution:>10}  {retail:>10}")
+        return "\n".join(lines)
 
     def parse_response(self, content: str) -> AgentOpinion:
         opinion_match = re.search(r"의견:\s*(매수|중립|매도)", content)
