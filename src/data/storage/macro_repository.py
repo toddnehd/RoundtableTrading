@@ -35,12 +35,12 @@ class MacroRepository:
                     (date, base_rate, usd_krw, cpi_yoy, kospi, kosdaq, export_yoy)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 ON CONFLICT (date) DO UPDATE
-                SET base_rate = EXCLUDED.base_rate,
-                    usd_krw = EXCLUDED.usd_krw,
-                    cpi_yoy = EXCLUDED.cpi_yoy,
-                    kospi = EXCLUDED.kospi,
-                    kosdaq = EXCLUDED.kosdaq,
-                    export_yoy = EXCLUDED.export_yoy
+                SET base_rate  = COALESCE(EXCLUDED.base_rate,  macro_indicators.base_rate),
+                    usd_krw    = COALESCE(EXCLUDED.usd_krw,    macro_indicators.usd_krw),
+                    cpi_yoy    = COALESCE(EXCLUDED.cpi_yoy,    macro_indicators.cpi_yoy),
+                    kospi      = COALESCE(EXCLUDED.kospi,      macro_indicators.kospi),
+                    kosdaq     = COALESCE(EXCLUDED.kosdaq,     macro_indicators.kosdaq),
+                    export_yoy = COALESCE(EXCLUDED.export_yoy, macro_indicators.export_yoy)
                 """,
                 [
                     (
