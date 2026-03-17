@@ -21,6 +21,8 @@ from loguru import logger
 
 from src.agents.base import AnalysisData
 from src.agents.llm import get_llm_client
+from src.config import settings
+from src.data.collectors.news_collector import NewsCollector
 from src.data.models import DailyPrice
 from src.debate import DebateEngine, DebateResult
 
@@ -156,15 +158,46 @@ async def run_test(provider: str, stock_code: str | None) -> None:
         logger.error(f"LLM 클라이언트 생성 실패: {e}")
         return
 
-    engine = DebateEngine(llm_client)
+    pool = None
+    if stock_code:
+        try:
+            import asyncpg
 
-    logger.info("토론 시작 (4개 에이전트 병렬 분석 중)...")
+            pool = await asyncpg.create_pool(settings.database_url)
+        except Exception as e:
+            logger.warning(f"DB 연결 실패 — enrich 없이 실행: {e}")
+
+    macro_repo = None
+    investor_repo = None
+    if pool:
+        from src.data.storage.investor_flow_repository import InvestorFlowRepository
+        from src.data.storage.macro_repository import MacroRepository
+
+        macro_repo = MacroRepository(pool)
+        investor_repo = InvestorFlowRepository(pool)
+
+    news_collector = None
+    if settings.naver_client_id and settings.naver_client_secret:
+        news_collector = NewsCollector(settings.naver_client_id, settings.naver_client_secret)
+
+    engine = DebateEngine(
+        llm_client,
+        pool=pool,
+        macro_repo=macro_repo,
+        investor_flow_repo=investor_repo,
+        news_collector=news_collector,
+    )
+
+    logger.info("토론 시작 (4개 에이전트 병렬 분석 + enrich 중)...")
     try:
         result = await engine.debate(data)
         print_debate_result(result)
 
     except Exception as e:
         logger.exception(f"토론 실패: {e}")
+    finally:
+        if pool:
+            await pool.close()
 
 
 def main():
