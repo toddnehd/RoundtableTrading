@@ -1,10 +1,13 @@
 """Debate engine for multi-agent stock analysis."""
 
 import asyncio
+import dataclasses
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
 
+import asyncpg
+import httpx
 from loguru import logger
 
 from src.agents import (
@@ -19,6 +22,11 @@ from src.agents import (
     TechnicalAnalysisAgent,
 )
 from src.agents.llm.base import LLMClient
+from src.config import settings
+from src.data.collectors.news_collector import NewsCollector
+from src.data.models import Disclosure, InvestorFlow, MacroSnapshot, NewsItem
+from src.data.storage.investor_flow_repository import InvestorFlowRepository
+from src.data.storage.macro_repository import MacroRepository
 
 
 class ConsensusLevel(str, Enum):
@@ -46,18 +54,30 @@ class DebateResult:
 class DebateEngine:
     """Orchestrates multi-agent debate for stock analysis."""
 
-    def __init__(self, llm_client: LLMClient) -> None:
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        pool: asyncpg.Pool | None = None,
+        news_collector: NewsCollector | None = None,
+        macro_repo: MacroRepository | None = None,
+        investor_flow_repo: InvestorFlowRepository | None = None,
+    ) -> None:
         self.llm = llm_client
         self.technical = TechnicalAnalysisAgent(llm_client)
         self.fundamental = FundamentalAnalysisAgent(llm_client)
         self.market = MarketSentimentAgent(llm_client)
         self.risk = RiskAssessmentAgent(llm_client)
         self.moderator = ModeratorAgent(llm_client)
+        self._pool = pool
+        self._news_collector = news_collector
+        self._macro_repo = macro_repo
+        self._investor_flow_repo = investor_flow_repo
 
     async def debate(self, data: AnalysisData) -> DebateResult:
         """Run multi-agent debate on stock data."""
         logger.info(f"토론 시작: {data.stock_name} ({data.stock_code})")
 
+        data = await self._enrich(data)
         opinions = await self._gather_opinions(data)
 
         consensus = self._calculate_consensus(opinions)
@@ -116,6 +136,90 @@ class DebateEngine:
         except Exception as e:
             logger.error(f"[{agent.name}] 분석 실패: {e}")
             raise
+
+    async def _enrich(self, data: AnalysisData) -> AnalysisData:
+        results = await asyncio.gather(
+            self._fetch_macro(data),
+            self._fetch_investor_flow(data),
+            self._fetch_news(data),
+            self._fetch_disclosures(data),
+            return_exceptions=True,
+        )
+        macro = results[0] if not isinstance(results[0], Exception) else None
+        investor_flow = results[1] if not isinstance(results[1], Exception) else []
+        news = results[2] if not isinstance(results[2], Exception) else []
+        disclosures = results[3] if not isinstance(results[3], Exception) else []
+        return dataclasses.replace(
+            data,
+            macro=macro,
+            investor_flow=investor_flow,
+            news_headlines=news,
+            disclosures=disclosures,
+        )
+
+    async def _fetch_macro(self, data: AnalysisData) -> MacroSnapshot | None:
+        if self._macro_repo is None:
+            return None
+        try:
+            return await self._macro_repo.get_latest(date.today())
+        except Exception as e:
+            logger.warning(f"거시경제 데이터 조회 실패: {e}")
+            return None
+
+    async def _fetch_investor_flow(self, data: AnalysisData) -> list[InvestorFlow]:
+        if self._investor_flow_repo is None:
+            return []
+        try:
+            return await self._investor_flow_repo.get_recent(data.stock_code, limit=20)
+        except Exception as e:
+            logger.warning(f"투자자 수급 데이터 조회 실패 [{data.stock_code}]: {e}")
+            return []
+
+    async def _fetch_news(self, data: AnalysisData) -> list[NewsItem]:
+        if self._news_collector is None:
+            return []
+        try:
+            return await self._news_collector.get_news(f"{data.stock_name} 주가", display=5)
+        except Exception as e:
+            logger.warning(f"뉴스 데이터 조회 실패 [{data.stock_name}]: {e}")
+            return []
+
+    async def _fetch_disclosures(self, data: AnalysisData) -> list[Disclosure]:
+        if not settings.dart_api_key:
+            return []
+        today = date.today()
+        bgn_de = (today - timedelta(days=30)).strftime("%Y%m%d")
+        end_de = today.strftime("%Y%m%d")
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://opendart.fss.or.kr/api/list.json",
+                    params={
+                        "crtfc_key": settings.dart_api_key,
+                        "stock_code": data.stock_code,
+                        "bgn_de": bgn_de,
+                        "end_de": end_de,
+                        "page_count": "10",
+                    },
+                )
+                resp.raise_for_status()
+                body = resp.json()
+
+            if body.get("status") != "000":
+                return []
+
+            return [
+                Disclosure(
+                    rcept_no=item.get("rcept_no", ""),
+                    report_nm=item.get("report_nm", ""),
+                    rcept_dt=item.get("rcept_dt", ""),
+                    corp_name=item.get("corp_name", ""),
+                )
+                for item in body.get("list", [])
+            ]
+        except Exception as e:
+            logger.warning(f"공시 조회 실패 [{data.stock_code}]: {e}")
+            return []
 
     def _calculate_consensus(self, opinions: list[AgentOpinion]) -> ConsensusLevel:
         """Calculate consensus level from opinions."""
