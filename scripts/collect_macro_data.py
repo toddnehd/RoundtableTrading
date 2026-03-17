@@ -15,6 +15,7 @@ from loguru import logger
 from src.config import settings
 from src.data.collectors.ecos_collector import EcosCollector
 from src.data.collectors.kis_collector import KisCollector
+from src.data.models import MacroSnapshot
 from src.data.storage.db_manager import DatabaseManager
 from src.data.storage.macro_repository import MacroRepository
 
@@ -39,8 +40,6 @@ async def collect_macro(start: str, end: str) -> None:
             ecos.get_usd_krw(start_ymd, end_ymd),
             ecos.get_cpi(start_ymd, end_ymd),
         )
-
-        from src.data.models import MacroSnapshot
 
         date_set = {d for d, _ in base_rates} | {d for d, _ in usd_krws} | {d for d, _ in cpis}
         br_map = dict(base_rates)
@@ -81,9 +80,10 @@ async def collect_macro(start: str, end: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="거시경제 데이터 배치 수집")
     parser.add_argument("--start", required=True, help="시작일 (YYYY-MM-DD)")
-    parser.add_argument("--end", required=True, help="종료일 (YYYY-MM-DD)")
+    parser.add_argument("--end", default=None, help="종료일 (YYYY-MM-DD, 기본값: 오늘)")
     args = parser.parse_args()
-    asyncio.run(collect_macro(args.start, args.end))
+    end = args.end or datetime.now().strftime("%Y-%m-%d")
+    asyncio.run(collect_macro(args.start, end))
 
 
 if __name__ == "__main__":
