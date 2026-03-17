@@ -181,21 +181,34 @@ Step 6 맥락: [공시·거시경제 영향 1줄, 데이터 없으면 '추가 �
             return ""
         return "### 성장률 (전년동기 대비)\n" + "\n".join(lines)
 
+    def _safe_float(self, value: str | None) -> float | None:
+        if value is None or value in ("None", "N/A", ""):
+            return None
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return None
+
     def _format_sector_comparison(self, data: AnalysisData) -> str:
         sc = {k: v for k, v in data.metadata.items() if k.startswith("sector_")}
         if not sc:
             return ""
         lines = ["## 업종비교"]
-        if sc.get("sector_per_avg") not in (None, "None"):
-            lines.append(f"- 업종 평균 PER: {float(sc['sector_per_avg']):.1f}")
-        if sc.get("sector_pbr_avg") not in (None, "None"):
-            lines.append(f"- 업종 평균 PBR: {float(sc['sector_pbr_avg']):.2f}")
-        if sc.get("sector_roe_avg") not in (None, "None"):
-            lines.append(f"- 업종 평균 ROE: {float(sc['sector_roe_avg']):.1f}%")
-        if sc.get("sector_op_margin_avg") not in (None, "None"):
-            lines.append(f"- 업종 평균 영업이익률: {float(sc['sector_op_margin_avg']):.1f}%")
-        if sc.get("peer_count") not in (None, "None"):
-            lines.append(f"- 비교 대상 기업 수: {int(float(sc['peer_count']))}개")
+        per_avg = self._safe_float(sc.get("sector_per_avg"))
+        if per_avg is not None:
+            lines.append(f"- 업종 평균 PER: {per_avg:.1f}")
+        pbr_avg = self._safe_float(sc.get("sector_pbr_avg"))
+        if pbr_avg is not None:
+            lines.append(f"- 업종 평균 PBR: {pbr_avg:.2f}")
+        roe_avg = self._safe_float(sc.get("sector_roe_avg"))
+        if roe_avg is not None:
+            lines.append(f"- 업종 평균 ROE: {roe_avg:.1f}%")
+        op_avg = self._safe_float(sc.get("sector_op_margin_avg"))
+        if op_avg is not None:
+            lines.append(f"- 업종 평균 영업이익률: {op_avg:.1f}%")
+        peer = self._safe_float(sc.get("peer_count"))
+        if peer is not None:
+            lines.append(f"- 비교 대상 기업 수: {int(peer)}개")
         return "\n".join(lines) if len(lines) > 1 else ""
 
     def _format_macro_context(self, data: AnalysisData) -> str:
