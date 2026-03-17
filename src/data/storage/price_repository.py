@@ -125,6 +125,10 @@ class PriceRepository:
             return latest.strftime("%Y%m%d")
         return None
 
+    async def save(self, prices: list[DailyPrice]) -> None:
+        await self._save(prices)
+        logger.info(f"Saved {len(prices)} price records to database")
+
     async def _save(self, prices: list[DailyPrice]) -> None:
         async with self._pool.acquire() as conn:
             await conn.executemany(
