@@ -18,6 +18,8 @@ from src.data.collectors.dart_collector import DartCollector
 from src.data.collectors.dart_corp_code import DartCorpCodeMapper
 from src.data.collectors.dart_errors import DartAPIError, DartNoDataError
 from src.data.storage.db_manager import DatabaseManager
+from src.data.storage.financial_repository import FinancialRepository
+from src.data.storage.stock_repository import StockRepository
 
 
 def get_available_quarters(reference_date: date) -> list[tuple[str, str]]:
@@ -79,8 +81,12 @@ async def collect_financial_data(stock_code: str, bsns_year: str, reprt_code: st
     await db.connect()
 
     try:
+        assert db.pool is not None
+        stock_repo = StockRepository(db.pool)
+        financial_repo = FinancialRepository(db.pool)
+
         # corp_code 조회 (DB에 없으면 DART에서 다운로드)
-        corp_code = await db.get_corp_code(stock_code)
+        corp_code = await stock_repo.get_corp_code(stock_code)
 
         if not corp_code:
             logger.info(f"{stock_code} corp_code 없음. DART에서 다운로드 중...")
@@ -92,19 +98,18 @@ async def collect_financial_data(stock_code: str, bsns_year: str, reprt_code: st
                 logger.error(f"{stock_code}의 corp_code를 찾을 수 없습니다.")
                 return
 
-            await db.save_corp_code(stock_code, corp_code)
+            await stock_repo.save_corp_code(stock_code, corp_code)
             logger.info(f"corp_code 저장 완료: {stock_code} → {corp_code}")
 
         # 현재 주가 조회 (PER/PBR 계산용)
         current_price: int | None = None
-        if db.pool:
-            async with db.pool.acquire() as conn:
-                row = await conn.fetchrow(
-                    "SELECT close_price FROM daily_prices WHERE stock_code = $1 ORDER BY date DESC LIMIT 1",
-                    stock_code,
-                )
-                if row:
-                    current_price = row["close_price"]
+        async with db.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT close_price FROM daily_prices WHERE stock_code = $1 ORDER BY date DESC LIMIT 1",
+                stock_code,
+            )
+            if row:
+                current_price = row["close_price"]
 
         # 재무 데이터 수집
         collector = DartCollector(api_key=settings.dart_api_key)
@@ -123,7 +128,7 @@ async def collect_financial_data(stock_code: str, bsns_year: str, reprt_code: st
             return
 
         # DB 저장
-        await db.save_financial_data([financial_data])
+        await financial_repo.save([financial_data])
         logger.info(
             f"{stock_code} ({bsns_year}) 재무 데이터 수집 완료: "
             f"매출={financial_data.revenue}, ROE={financial_data.roe}"

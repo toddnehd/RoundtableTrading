@@ -5,6 +5,8 @@ from loguru import logger
 
 from src.data.collectors.pykrx_collector import PyKrxCollector
 from src.data.storage.db_manager import DatabaseManager
+from src.data.storage.price_repository import PriceRepository
+from src.data.storage.stock_repository import StockRepository
 
 
 async def collect_initial_data():
@@ -14,6 +16,9 @@ async def collect_initial_data():
 
     try:
         await db.connect()
+        assert db.pool is not None
+        stock_repo = StockRepository(db.pool)
+        price_repo = PriceRepository(db.pool)
 
         end_date = datetime.now()
         start_date = end_date - timedelta(days=365 * 3)
@@ -31,7 +36,7 @@ async def collect_initial_data():
                 logger.warning(f"No stocks found for {market}")
                 continue
 
-            await db.save_stocks(stocks)
+            await stock_repo.save(stocks)
             logger.info(f"Saved {len(stocks)} {market} stocks")
 
             for i, stock in enumerate(stocks, 1):
@@ -50,7 +55,7 @@ async def collect_initial_data():
                 if not is_valid:
                     logger.warning(f"Data validation issues for {stock.stock_code}: {issues}")
 
-                await db.save_daily_prices(prices)
+                await price_repo.save(prices)
 
                 await asyncio.sleep(0.1)
 
