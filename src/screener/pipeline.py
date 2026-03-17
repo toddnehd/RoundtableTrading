@@ -85,6 +85,54 @@ class ScreeningPipeline:
             metadata=metadata,
         )
 
+    async def get_sector_comparison(self, stock_code: str, sector: str) -> dict[str, float | None]:
+        if not self._pool:
+            raise RuntimeError("Pipeline not connected. Call connect() first.")
+
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT
+                    AVG(f.per)              AS sector_per_avg,
+                    AVG(f.pbr)              AS sector_pbr_avg,
+                    AVG(f.roe)              AS sector_roe_avg,
+                    AVG(f.operating_margin) AS sector_op_margin_avg,
+                    COUNT(*)                AS peer_count
+                FROM financial_data f
+                JOIN stocks s ON f.stock_code = s.stock_code
+                WHERE s.sector = $1
+                  AND f.stock_code != $2
+                  AND f.quarter = (
+                      SELECT MAX(quarter) FROM financial_data WHERE stock_code = $2
+                  )
+                """,
+                sector,
+                stock_code,
+            )
+
+        def _f(v: object) -> float | None:
+            return float(v) if v is not None else None  # type: ignore[arg-type]
+
+        if row is None:
+            return {
+                k: None
+                for k in (
+                    "sector_per_avg",
+                    "sector_pbr_avg",
+                    "sector_roe_avg",
+                    "sector_op_margin_avg",
+                    "peer_count",
+                )
+            }
+
+        return {
+            "sector_per_avg": _f(row["sector_per_avg"]),
+            "sector_pbr_avg": _f(row["sector_pbr_avg"]),
+            "sector_roe_avg": _f(row["sector_roe_avg"]),
+            "sector_op_margin_avg": _f(row["sector_op_margin_avg"]),
+            "peer_count": _f(row["peer_count"]),
+        }
+
     async def to_analysis_data_batch(
         self,
         results: list[ScreeningResult],
